@@ -22,7 +22,7 @@ class kinectHandler(object):
 class robotTracker(object):
 	def __init__(self):
 		self.handler=kinectHandler()
-		self.mmm=MMM('COM3')
+		self.mmm=MMM('COM4')
 		time.sleep(4)
 		self.thread = threading.Thread(target=self.updateRobot, args=())
 		self.thread.daemon = True            
