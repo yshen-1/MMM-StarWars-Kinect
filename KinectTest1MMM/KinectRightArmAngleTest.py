@@ -16,5 +16,6 @@ def getRightArmElevation():
 				rightHandAngle=math.atan(rightHandY/rightHandZ)
 				return rightHandAngle
 
-
+while True:
+	print(getRightArmElevation())
 

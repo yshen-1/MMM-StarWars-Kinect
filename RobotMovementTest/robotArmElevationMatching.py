@@ -44,3 +44,6 @@ class robotTracker(object):
 				time.sleep(2)
 		self.mmm.ser.close()
 		quit()   
+
+robotHandler=robotTracker()
+robotHandler.run()
