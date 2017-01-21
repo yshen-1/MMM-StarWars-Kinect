@@ -17,7 +17,6 @@ def getDepthData():
 	pygame.init()
 	screen=pygame.display.set_mode((960,540),pygame.HWSURFACE|pygame.DOUBLEBUF,32)
 	frame_surface=pygame.Surface((kinect.depth_frame_desc.Width,kinect.depth_frame_desc.Height),0,32)
-	print(frame_surface)
 	clock=pygame.time.Clock()
 	while True:
 		if kinect.has_new_depth_frame():

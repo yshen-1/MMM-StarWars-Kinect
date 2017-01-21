@@ -13,7 +13,7 @@ def printHandPosition():
 				if not body.is_tracked:
 					continue
 				joints=body.joints
-				rightHandPosition=joints[PyKinectV2.JointType_HandRight].Position 
+				rightHandPosition=joints[PyKinectV2.JointType_HandRight].Position
 				print rightHandPosition.x,rightHandPosition.y,rightHandPosition.z
 	kinect.close()
 printHandPosition()
