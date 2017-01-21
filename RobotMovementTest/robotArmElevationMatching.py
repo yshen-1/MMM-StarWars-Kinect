@@ -5,7 +5,7 @@ from MMM import MMM
 class kinectHandler(object):
 	def __init__(self):
 		self.kinect=PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body)
-	def getRightArmElevation():
+	def getRightArmElevation(self):
 		bodies=None
 		if self.kinect.has_new_body_frame():
 			bodies=self.kinect.get_last_body_frame()
