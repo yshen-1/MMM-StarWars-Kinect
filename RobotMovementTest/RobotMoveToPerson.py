@@ -98,6 +98,7 @@ class graphicalDebugger():
         self.tracking.start()
         self.width=width
         self.height=height
+        self.timerDelay=100 #milliseconds
     def mousePressed(self,event):
         pass
     def keyPressed(self,event):
@@ -123,17 +124,10 @@ class graphicalDebugger():
             redrawAllWrapper(canvas)
 
         def timerFiredWrapper(canvas):
-            timerFired(data)
-            redrawAllWrapper(canvas, data)
+            self.timerFired()
+            redrawAllWrapper(canvas)
             # pause, then call timerFired again
-            canvas.after(data.timerDelay, timerFiredWrapper, canvas, data)
-        # Set up data and call init
-        class Struct(object): pass
-        data = Struct()
-        data.width = width
-        data.height = height
-        data.timerDelay = 100 # milliseconds
-        init(data)
+            canvas.after(self.timerDelay, timerFiredWrapper, canvas)
         # create the root and the canvas
         root = Tk()
         canvas = Canvas(root, width=data.width, height=data.height)
