@@ -2,16 +2,22 @@
 # To download PyUSB with conda:
 # conda install -c trentonoliphant pyusb=1.0.0b2
 # conda install -c m-labs libusb=1.0.20
-
+from __future__ import print_function,division
 import math, copy
 import numpy as np
 import usb.core
 import usb.util
-from tkinter import *
-from queue import Queue
+import pygame
+import Queue
 import threading
+import random
+import cv2
 from pykinect2 import PyKinectV2, PyKinectRuntime
 from pykinect2.PyKinectV2 import *
+
+def rgbString(red, green, blue):
+    #http://www.cs.cmu.edu/~112/notes/notes-graphics.html#customColors
+    return "#%02x%02x%02x" % (red, green, blue)
 
 def checkIfKinectConnected():
     # Actually checks if a microsoft device is connected
@@ -108,74 +114,85 @@ class humanTracker(threading.Thread):
 #Graphical Debugger
 #Plots 2D array graphically
 ##############################################################################
-# events-example0.py
-# Barebones timer, mouse, and keyboard events
+def makeArrayRectangular(targetArray):
+    #Makes sure last row of 2D array matches row 1
+    targetCols=len(targetArray[0])
+    missingCols=targetCols-len(targetArray[-1])
+    newArray=targetArray.tolist()
+    newArray[-1].extend([0]*missingCols)
+    return np.array(newArray)
+
+
+
+
+def convert2dArrayToImage(newNumpyArray):
+    #Converts 2D grid to redscale image array
+    #Scale numpy array to 255 max (8 bits)
+    maximum=np.max(newNumpyArray)
+    scalingFactor=(255/maximum)
+    numpyArray=copy.deepcopy(newNumpyArray)
+    numpyArray=np.array(numpyArray)*scalingFactor
+    Rarray=numpyArray.astype(np.uint8)
+    Garray=np.zeros(numpyArray.shape,np.uint8)
+    Barray=np.zeros(numpyArray.shape,np.uint8)
+    RGBarray=np.stack((Rarray,Garray,Barray),axis=2)
+    return RGBarray
+    #cv2.imwrite('test.jpg',BGRarray)
+
 class graphicalDebugger():
-    def __init__(self,width,height):
-        self.dataStorage=Queue()
+    def trackerSetup(self):
+        self.dataStorage=Queue.Queue()
         self.tracking=humanTracker(self.dataStorage)
         self.tracking.setDaemon(True)
         self.tracking.start()
-        self.width=width
-        self.height=height
-        self.timerDelay=100 #milliseconds
-    def mousePressed(self,event):
-        pass
-    def keyPressed(self,event):
-        pass
-    def timerFired(self)
-        pass
-    def redrawAll(self,canvas):
-        pass
+    def __init__(self):
+        pygame.init()
+        self.trackerSetup()
+        '''
+        ##############################################
+        #Test code
+        ##############################################
+        for i in range(100):
+            testArray=[[random.random()*100 for j in range(640)]
+                       for k in range(480)]
+            testArray=np.array(testArray)
+            self.dataStorage.put(testArray)
+            print("Generating test array: ", i)
+        #################################################
+        '''
+        while self.dataStorage.empty():
+            #Wait until data starts arriving
+            pass
+        self.dataArray=self.dataStorage.get()
+        self.dataArray=makeArrayRectangular(self.dataArray)
+        self.image=convert2dArrayToImage(self.dataArray)
+        self.height=len(self.image)
+        self.width=len(self.image[0])
+        self.screen=pygame.display.set_mode((self.width,self.height))
+        self.image=np.rot90(self.image,axes=(1,0))
+        self.isRunning=True
+    def timerFired(self):
+        if not self.dataStorage.empty():
+            self.dataArray=self.dataStorage.get()
+            self.dataArray=makeArrayRectangular(self.dataArray)
+            self.image=convert2dArrayToImage(self.dataArray)
+            self.image=np.rot90(self.image,axes=(1,0))
+    def drawAll(self):
+        #rotate image array 90 degrees clockwise
+        pygame.surfarray.blit_array(self.screen,self.image)
     def run(self):
-        def redrawAllWrapper(canvas):
-            canvas.delete(ALL)
-            canvas.create_rectangle(0, 0, self.width, self.height,
-                                    fill='white', width=0)
-            self.redrawAll(canvas)
-            canvas.update()
+        while self.isRunning:
+            for event in pygame.event.get():
+                if event.type==pygame.QUIT:
+                    self.isRunning=False
+                elif event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE:
+                    self.isRunning=False
 
-        def mousePressedWrapper(event, canvas):
-            self.mousePressed(event)
-            redrawAllWrapper(canvas)
-
-        def keyPressedWrapper(event, canvas):
-            self.keyPressed(event)
-            redrawAllWrapper(canvas)
-
-        def timerFiredWrapper(canvas):
+            self.drawAll()
             self.timerFired()
-            redrawAllWrapper(canvas)
-            # pause, then call timerFired again
-            canvas.after(self.timerDelay, timerFiredWrapper, canvas)
-        # create the root and the canvas
-        root = Tk()
-        canvas = Canvas(root, width=data.width, height=data.height)
-        canvas.pack()
-        # set up events
-        root.bind("<Button-1>", lambda event:
-                                mousePressedWrapper(event, canvas, data))
-        root.bind("<Key>", lambda event:
-                                keyPressedWrapper(event, canvas, data))
-        timerFiredWrapper(canvas, data)
-        # and launch the app
-        root.mainloop()  # blocks until window is closed
-        print("bye!")
+            pygame.display.update()
+        pygame.quit()
 
-debugger=graphicalDebugger(300,300)
+
+debugger=graphicalDebugger()
 debugger.run()
-
-
-'''
-class arrayInterface(threading.Thread):
-    def __init__(self,queue,outQueue):
-        threading.Thread.__init__(self)
-        self.queue=queue
-        self.running=True
-    def run(self):
-        while self.running:
-            arrayToGraph=self.queue.get()
-            self.queue.task_done()
-    def stop(self):
-        self.running=False
-'''
