@@ -148,18 +148,18 @@ class graphicalDebugger():
     def __init__(self):
         pygame.init()
         self.trackerSetup()
-        '''
+'''
         ##############################################
         #Test code
         ##############################################
-        for i in range(100):
+        for i in range(10):
             testArray=[[random.random()*100 for j in range(640)]
                        for k in range(480)]
             testArray=np.array(testArray)
             self.dataStorage.put(testArray)
             print("Generating test array: ", i)
         #################################################
-        '''
+'''
         while self.dataStorage.empty():
             #Wait until data starts arriving
             pass
@@ -179,15 +179,19 @@ class graphicalDebugger():
             self.image=np.rot90(self.image,axes=(1,0))
     def drawAll(self):
         #rotate image array 90 degrees clockwise
+        #Rotation required by pygame (surface array is [x][y] while image is
+        #[y][x])
         pygame.surfarray.blit_array(self.screen,self.image)
     def run(self):
         while self.isRunning:
+            (mouseX,mouseY)=pygame.mouse.get_pos()
+            screenArray=pygame.surfarray.array3d(self.screen)
+            print(screenArray[mouseX][mouseY])
             for event in pygame.event.get():
                 if event.type==pygame.QUIT:
                     self.isRunning=False
                 elif event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE:
                     self.isRunning=False
-
             self.drawAll()
             self.timerFired()
             pygame.display.update()
