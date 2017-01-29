@@ -15,6 +15,10 @@ import cv2
 from pykinect2 import PyKinectV2, PyKinectRuntime
 from pykinect2.PyKinectV2 import *
 
+'''
+IMPORTANT: Kinect depth frame contents are full depth values in mm.
+They range up to 4000 mm. NO NEED FOR BITWISE SHIFT.
+'''
 def rgbString(red, green, blue):
     #http://www.cs.cmu.edu/~112/notes/notes-graphics.html#customColors
     return "#%02x%02x%02x" % (red, green, blue)
@@ -22,16 +26,17 @@ def rgbString(red, green, blue):
 def checkIfKinectConnected():
     # Actually checks if a microsoft device is connected
     # Microsoft vendorID = 0x045e
+    return True
+    '''
     device = usb.core.find(idVendor = 0x045e)
     if device != None:
         return True
     else:
         return False
-
+    '''
 ##############################################################################
 #Description:
-#Currently prints out 2D array of Kinect depth data
-#Kinect raw depth data is 1D numpy array of uint16 numbers
+#Currently displays depth image from kinect that is repeated
 ##############################################################################
 
 def convertTo2DGrid(oneDArray,cols=640):
@@ -84,7 +89,7 @@ class humanTracker(threading.Thread):
         threading.Thread.__init__(self)
         self.kinect=KinectHandler()
         self.isRunning=True
-        self.playerIndexBits=3
+        self.playerIndexBits=0
         self.queue=queue
     def stop(self):
         self.isRunning=False
@@ -105,6 +110,7 @@ class humanTracker(threading.Thread):
             depthGrid=convertTo2DGrid(depthFrameToGrid)
             self.queue.put(depthGrid)
             if not checkIfKinectConnected():
+                print("Bye!")
                 self.isRunning=False
         self.kinect.end()
 
@@ -128,7 +134,7 @@ def makeArrayRectangular(targetArray):
 def convert2dArrayToImage(newNumpyArray):
     #Converts 2D grid to redscale image array
     #Scale numpy array to 255 max (8 bits)
-    maximum=np.max(newNumpyArray)
+    maximum=4000
     scalingFactor=(255/maximum)
     numpyArray=copy.deepcopy(newNumpyArray)
     numpyArray=np.array(numpyArray)*scalingFactor
@@ -148,18 +154,6 @@ class graphicalDebugger():
     def __init__(self):
         pygame.init()
         self.trackerSetup()
-'''
-        ##############################################
-        #Test code
-        ##############################################
-        for i in range(10):
-            testArray=[[random.random()*100 for j in range(640)]
-                       for k in range(480)]
-            testArray=np.array(testArray)
-            self.dataStorage.put(testArray)
-            print("Generating test array: ", i)
-        #################################################
-'''
         while self.dataStorage.empty():
             #Wait until data starts arriving
             pass
@@ -169,24 +163,34 @@ class graphicalDebugger():
         self.height=len(self.image)
         self.width=len(self.image[0])
         self.screen=pygame.display.set_mode((self.width,self.height))
+        self.overlay=pygame.Surface((self.width,self.height))
+        self.overlay.fill((0,0,0))
+        self.display=pygame.Surface((self.width,self.height))
+        self.display.fill((0,0,0))
+        self.display=self.display.convert()
+        self.overlay=self.overlay.convert()
         self.image=np.rot90(self.image,axes=(1,0))
         self.isRunning=True
     def timerFired(self):
         if not self.dataStorage.empty():
             self.dataArray=self.dataStorage.get()
+            print("Update!")
             self.dataArray=makeArrayRectangular(self.dataArray)
             self.image=convert2dArrayToImage(self.dataArray)
-            self.image=np.rot90(self.image,axes=(1,0))
+            self.image=np.rot90(self.image)
     def drawAll(self):
         #rotate image array 90 degrees clockwise
         #Rotation required by pygame (surface array is [x][y] while image is
         #[y][x])
-        pygame.surfarray.blit_array(self.screen,self.image)
+        self.screen.blit(self.overlay,(0,0))
+        pygame.surfarray.blit_array(self.display,self.image)
+        self.display=self.display.convert()
+        self.screen.blit(self.display,(0,0))
     def run(self):
         while self.isRunning:
             (mouseX,mouseY)=pygame.mouse.get_pos()
             screenArray=pygame.surfarray.array3d(self.screen)
-            print(screenArray[mouseX][mouseY])
+            print(screenArray[mouseX][mouseY][0]*(4000/255))
             for event in pygame.event.get():
                 if event.type==pygame.QUIT:
                     self.isRunning=False
@@ -196,7 +200,7 @@ class graphicalDebugger():
             self.timerFired()
             pygame.display.update()
         pygame.quit()
-
-
+        self.tracking.stop()
+#118 cm test
 debugger=graphicalDebugger()
 debugger.run()
