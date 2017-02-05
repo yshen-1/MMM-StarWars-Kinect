@@ -7,6 +7,7 @@ import math, copy
 import numpy as np
 import usb.core
 import usb.util
+import pygame
 import Queue
 import threading
 import random
@@ -43,7 +44,7 @@ def checkIfKinectConnected():
 def convertTo2DGrid(oneDArray,cols=640):
     grid=[]
     while(len(oneDArray)>0):
-        grid.append(list(reversed(oneDArray[:cols])))
+        grid.append(oneDArray[:cols])
         del oneDArray[:cols]
     return np.array(grid)
 
@@ -143,28 +144,65 @@ def convert2dArrayToImage(newNumpyArray):
     Rarray=numpyArray.astype(np.uint8)
     Garray=np.zeros(numpyArray.shape,np.uint8)
     Barray=np.zeros(numpyArray.shape,np.uint8)
-    BGRarray=np.stack((Barray,Garray,Rarray),axis=2)
-#    return RGBarray
-    cv2.imwrite('data.jpg',BGRarray)
+    RGBarray=np.stack((Rarray,Garray,Barray),axis=2)
+    return RGBarray
+    #cv2.imwrite('data.jpg',BGRarray)
 
-class depthCamera():
-    #Takes a depth image from the kinect and writes it out to data.jpg.
+class graphicalDebugger():
     def trackerSetup(self):
         self.dataStorage=Queue.Queue()
         self.tracking=humanTracker(self.dataStorage)
         self.tracking.setDaemon(True)
         self.tracking.start()
     def __init__(self):
+        pygame.init()
         self.trackerSetup()
         while self.dataStorage.empty():
             #Wait until data starts arriving
             pass
-        print("Ready!")
-    def update(self):
+        (self.dataArray,self.width,self.height)=self.dataStorage.get()
+        self.dataArray=makeArrayRectangular(self.dataArray)
+        self.image=convert2dArrayToImage(self.dataArray)
+        self.screen=pygame.display.set_mode((self.width,self.height))
+        self.overlay=pygame.Surface((self.width,self.height))
+        self.overlay.fill((0,0,0))
+        self.display=pygame.Surface((self.width,self.height))
+        self.display.fill((0,0,0))
+        self.display=self.display.convert()
+        self.overlay=self.overlay.convert()
+        self.image=np.rot90(self.image,k=5)
+        self.isRunning=True
+
+    def timerFired(self):
         if not self.dataStorage.empty():
             (self.dataArray,self.width,self.height)=self.dataStorage.get()
             self.dataArray=makeArrayRectangular(self.dataArray)
-            convert2dArrayToImage(self.dataArray)
+            self.image=convert2dArrayToImage(self.dataArray)
+            self.image=np.rot90(self.image,k=5)
+    def drawAll(self):
+        #rotate image array 90 degrees clockwise
+        #Rotation required by pygame (surface array is [x][y] while image is
+        #[y][x])
+        self.screen.blit(self.overlay,(0,0))
+        pygame.surfarray.blit_array(self.display,self.image)
+        self.display=self.display.convert()
+        self.screen.blit(self.display,(0,0))
+        print("Updated!")
+    def run(self):
+        while self.isRunning:
+            (mouseX,mouseY)=pygame.mouse.get_pos()
+            screenArray=pygame.surfarray.array3d(self.screen)
+            print(screenArray[mouseX][mouseY][0]*(4000/255))
+            for event in pygame.event.get():
+                if event.type==pygame.QUIT:
+                    self.isRunning=False
+                elif event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE:
+                    self.isRunning=False
+            self.drawAll()
+            self.timerFired()
+            pygame.display.update()
+        pygame.quit()
+        self.tracking.stop()
 
-camera=depthCamera()
-camera.update()
+debugger=graphicalDebugger()
+debugger.run()
