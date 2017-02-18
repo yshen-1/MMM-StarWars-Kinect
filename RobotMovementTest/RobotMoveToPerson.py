@@ -7,7 +7,6 @@ import math, copy
 import numpy as np
 import usb.core
 import usb.util
-import pygame
 import Queue
 import threading
 import random
@@ -15,6 +14,12 @@ import random
 from pykinect2 import PyKinectV2, PyKinectRuntime
 from pykinect2.PyKinectV2 import *
 
+'''
+IMPORTANT: Kinect depth frame contents are full depth values in mm.
+They range up to 4000 mm. NO NEED FOR BITWISE SHIFT.
+
+TO GET DIMENSIONS OF DEPTH FRAME, USE self.kinectDepthStream.depth_frame_desc.Width, ''.Height
+'''
 def rgbString(red, green, blue):
     #http://www.cs.cmu.edu/~112/notes/notes-graphics.html#customColors
     return "#%02x%02x%02x" % (red, green, blue)
@@ -22,25 +27,43 @@ def rgbString(red, green, blue):
 def checkIfKinectConnected():
     # Actually checks if a microsoft device is connected
     # Microsoft vendorID = 0x045e
+    return True
+    '''
     device = usb.core.find(idVendor = 0x045e)
     if device != None:
         return True
     else:
         return False
-
+    '''
 ##############################################################################
 #Description:
-#Currently prints out 2D array of Kinect depth data
-#Kinect raw depth data is 1D numpy array of uint16 numbers
+#Currently displays depth image from kinect that is repeated
 ##############################################################################
 
-def convertTo2DGrid(oneDArray,cols=640):
+def convertTo2DGrid(oneDArray,cols):
     grid=[]
     while(len(oneDArray)>0):
-        grid.append(oneDArray[:cols])
+        grid.append(list(reversed(oneDArray[:cols])))
         del oneDArray[:cols]
     return np.array(grid)
 
+def makeArrayRectangular(targetArray):
+    #Makes sure last row of 2D array matches row 1
+    targetCols=len(targetArray[0])
+    missingCols=targetCols-len(targetArray[-1])
+    newArray=targetArray.tolist()
+    newArray[-1].extend([0]*missingCols)
+    return newArray
+
+def condenseDepthFrame(depthFrame):
+    condensedRow=depthFrame.pop(0)
+    for remainingRows in depthFrame:
+        for i in range(len(remainingRows)):
+            depthValue=remainingRows[i]
+            if depthValue<4000 and depthValue>800:
+                condensedRow[i]=(depthValue if depthValue<condensedRow[i]
+                                            else condensedRow[i])
+    return condensedRow
 
 class KinectHandler(object):
     def __init__(self):
@@ -72,7 +95,15 @@ class KinectHandler(object):
         frame=None
         if self.kinectDepthStream.has_new_depth_frame():
             frame=self.kinectDepthStream.get_last_depth_frame()
-        return frame
+            return (frame, self.kinectDepthStream.depth_frame_desc.Width,
+                    self.kinectDepthStream.depth_frame_desc.Height)
+
+    def getNewColorData(self):
+        frame=None
+        if self.kinectColorStream.has_new_color_frame():
+            frame=self.kinectColorStream.get_last_color_frame()
+        return (frame, self.kinectColorStream.color_frame_desc.Width,
+                self.kinectColorStream.color_frame_desc.Height)
 
     def end(self):
         self.kinectBodyStream.close()
@@ -80,128 +111,23 @@ class KinectHandler(object):
         self.kinectColorStream.close()
 
 
-class humanTracker(threading.Thread):
-    def __init__(self,queue):
-        threading.Thread.__init__(self)
+class humanTracker(object):
+    def __init__(self):
         self.kinect=KinectHandler()
         self.isRunning=True
-        self.playerIndexBits=3
-        self.queue=queue
 
-    def stop(self):
-        self.isRunning=False
     def run(self):
         while self.isRunning:
             #DO STUFF
             newDepthFrame=self.kinect.getNewDepthData()
             if newDepthFrame==None: continue
-            #Assume 3 least significant bits represent player index
-            depthFrameToGrid=list(copy.copy(newDepthFrame >>
-                                            self.playerIndexBits))
-            '''
-            #Scale to 8 bits
-            depthFrameToGrid=list(depthFrameToGrid*
-                                  ((2**8)/(2**(16-self.playerIndexBits))))
-            '''
-            #@TODO Look up actual resolution of kinect
-            depthGrid=convertTo2DGrid(depthFrameToGrid)
-            self.queue.put(depthGrid)
+            (frame,width,height)=newDepthFrame
+            depthContainer=list(copy.deepcopy(frame))
+            depthGrid=convertTo2DGrid(depthContainer,width)
+            depthGrid=makeArrayRectangular(depthGrid)
+            depthLine=condenseDepthFrame(depthGrid)
+
             if not checkIfKinectConnected():
+                print("Bye!")
                 self.isRunning=False
         self.kinect.end()
-
-
-
-
-##############################################################################
-#Graphical Debugger
-#Plots 2D array graphically
-##############################################################################
-def makeArrayRectangular(targetArray):
-    #Makes sure last row of 2D array matches row 1
-    targetCols=len(targetArray[0])
-    missingCols=targetCols-len(targetArray[-1])
-    newArray=targetArray.tolist()
-    newArray[-1].extend([0]*missingCols)
-    return np.array(newArray)
-
-
-
-
-def convert2dArrayToImage(newNumpyArray):
-    #Converts 2D grid to redscale image array
-    #Scale numpy array to 255 max (8 bits)
-    maximum=np.max(newNumpyArray)
-    scalingFactor=(255/maximum)
-    numpyArray=copy.deepcopy(newNumpyArray)
-    numpyArray=np.array(numpyArray)*scalingFactor
-    Rarray=numpyArray.astype(np.uint8)
-    Garray=np.zeros(numpyArray.shape,np.uint8)
-    Barray=np.zeros(numpyArray.shape,np.uint8)
-    RGBarray=np.stack((Rarray,Garray,Barray),axis=2)
-    return RGBarray
-    #cv2.imwrite('test.jpg',BGRarray)
-
-class graphicalDebugger():
-    def trackerSetup(self):
-        self.dataStorage=Queue.Queue()
-        self.tracking=humanTracker(self.dataStorage)
-        self.tracking.setDaemon(True)
-        self.tracking.start()
-    def __init__(self):
-        pygame.init()
-        self.trackerSetup()
-        '''
-        ##############################################
-        #Test code
-        ##############################################
-        for i in range(10):
-            testArray=[[random.random()*100 for j in range(640)]
-                       for k in range(480)]
-            testArray=np.array(testArray)
-            self.dataStorage.put(testArray)
-            print("Generating test array: ", i)
-        #################################################
-        '''
-        while self.dataStorage.empty():
-            #Wait until data starts arriving
-            pass
-        self.dataArray=self.dataStorage.get()
-        self.dataArray=makeArrayRectangular(self.dataArray)
-        self.image=convert2dArrayToImage(self.dataArray)
-        self.height=len(self.image)
-        self.width=len(self.image[0])
-        self.screen=pygame.display.set_mode((self.width,self.height))
-        self.image=np.rot90(self.image,axes=(1,0))
-        self.isRunning=True
-    def timerFired(self):
-        if not self.dataStorage.empty():
-            self.dataArray=self.dataStorage.get()
-            self.dataArray=makeArrayRectangular(self.dataArray)
-            self.image=convert2dArrayToImage(self.dataArray)
-            self.image=np.rot90(self.image,axes=(1,0))
-    def drawAll(self):
-        #rotate image array 90 degrees clockwise
-        #Rotation required by pygame (surface array is [x][y] while image is
-        #[y][x])
-        print(self.image.shape)
-        pygame.surfarray.blit_array(self.screen,self.image)
-
-    def run(self):
-        while self.isRunning:
-            (mouseX,mouseY)=pygame.mouse.get_pos()
-            screenArray=pygame.surfarray.array3d(self.screen)
-            print(screenArray[mouseX][mouseY])
-            for event in pygame.event.get():
-                if event.type==pygame.QUIT:
-                    self.isRunning=False
-                elif event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE:
-                    self.isRunning=False
-            self.drawAll()
-            self.timerFired()
-            pygame.display.update()
-        pygame.quit()
-
-
-debugger=graphicalDebugger()
-debugger.run()
