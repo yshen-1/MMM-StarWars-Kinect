@@ -11,7 +11,7 @@ import pygame
 import Queue
 import threading
 import random
-import cv2
+#import cv2
 from pykinect2 import PyKinectV2, PyKinectRuntime
 from pykinect2.PyKinectV2 import *
 
@@ -51,20 +51,21 @@ class KinectHandler(object):
         self.kinectColorStream=PyKinectRuntime.PyKinectRuntime(
                                PyKinectV2.FrameSourceTypes_Color)
 
-    def getPersonPosition(self):
+    def getPeoplePosition(self):
         bodies=None
         if self.kinectBodyStream.has_new_body_frame():
             bodies=self.kinectBodyStream.get_last_body_frame()
         if bodies!=None:
-            body=bodies.bodies[-1]
-            if body.is_tracked:
-                joints = body.joints
-                hip = joints[PyKinectV2.JointType_SpineBase]
-                hipX = hip.Position.x
-                hipZ = hip.Position.z
-                distanceToUser = (hipX**2+hipZ**2)**0.5
-                theta =  math.atan(hipX/hipZ)
-                return (distanceToUser, theta)
+            for body in bodies.bodies:
+                if body.is_tracked:
+                    joints = body.joints
+                    hip = joints[PyKinectV2.JointType_SpineBase]
+                    hipX = hip.Position.x
+                    hipZ = hip.Position.z
+                    distanceToUser = (hipX**2+hipZ**2)**0.5
+                    theta =  math.atan(hipX/hipZ)
+                    playerIndex = bodies.bodies.index(body)
+                    return (distanceToUser, theta, playerIndex)
 
     def getNewDepthData(self):
         #Returns 1D numpy array of 2 byte objects
@@ -86,6 +87,7 @@ class humanTracker(threading.Thread):
         self.isRunning=True
         self.playerIndexBits=3
         self.queue=queue
+
     def stop(self):
         self.isRunning=False
     def run(self):
@@ -107,6 +109,7 @@ class humanTracker(threading.Thread):
             if not checkIfKinectConnected():
                 self.isRunning=False
         self.kinect.end()
+
 
 
 
@@ -148,7 +151,7 @@ class graphicalDebugger():
     def __init__(self):
         pygame.init()
         self.trackerSetup()
-'''
+        '''
         ##############################################
         #Test code
         ##############################################
@@ -159,7 +162,7 @@ class graphicalDebugger():
             self.dataStorage.put(testArray)
             print("Generating test array: ", i)
         #################################################
-'''
+        '''
         while self.dataStorage.empty():
             #Wait until data starts arriving
             pass
@@ -181,7 +184,9 @@ class graphicalDebugger():
         #rotate image array 90 degrees clockwise
         #Rotation required by pygame (surface array is [x][y] while image is
         #[y][x])
+        print(self.image.shape)
         pygame.surfarray.blit_array(self.screen,self.image)
+
     def run(self):
         while self.isRunning:
             (mouseX,mouseY)=pygame.mouse.get_pos()
