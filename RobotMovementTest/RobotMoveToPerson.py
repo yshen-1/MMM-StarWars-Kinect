@@ -82,20 +82,21 @@ class KinectHandler(object):
         self.kinectColorStream=PyKinectRuntime.PyKinectRuntime(
                                PyKinectV2.FrameSourceTypes_Color)
 
-    def getPersonPosition(self):
+    def getPeoplePosition(self):
         bodies=None
         if self.kinectBodyStream.has_new_body_frame():
             bodies=self.kinectBodyStream.get_last_body_frame()
         if bodies!=None:
-            body=bodies.bodies[-1]
-            if body.is_tracked:
-                joints = body.joints
-                hip = joints[PyKinectV2.JointType_SpineBase]
-                hipX = hip.Position.x
-                hipZ = hip.Position.z
-                distanceToUser = (hipX**2+hipZ**2)**0.5
-                theta =  math.atan(hipX/hipZ)
-                return (distanceToUser, theta)
+            for body in bodies.bodies:
+                if body.is_tracked:
+                    joints = body.joints
+                    hip = joints[PyKinectV2.JointType_SpineBase]
+                    hipX = hip.Position.x
+                    hipZ = hip.Position.z
+                    distanceToUser = (hipX**2+hipZ**2)**0.5
+                    theta =  math.atan(hipX/hipZ)
+                    playerIndex = bodies.bodies.index(body)
+                    return (distanceToUser, theta, playerIndex)
 
     def getNewDepthData(self):
         #Returns 1D numpy array of 2 byte objects
@@ -152,5 +153,6 @@ class humanTracker(object):
 
         self.kinect.end()
 
-tracker=humanTracker()
-tracker.run()
+if __name__=='__main__':
+    tracker=humanTracker()
+    tracker.run()
