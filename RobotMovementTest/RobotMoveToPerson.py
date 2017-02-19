@@ -40,13 +40,30 @@ def checkIfKinectConnected():
 #Currently displays depth image from kinect that is repeated
 ##############################################################################
 
-def convertTo2DGrid(oneDArray,cols=640):
+def convertTo2DGrid(oneDArray,cols):
     grid=[]
     while(len(oneDArray)>0):
         grid.append(list(reversed(oneDArray[:cols])))
         del oneDArray[:cols]
     return np.array(grid)
 
+def makeArrayRectangular(targetArray):
+    #Makes sure last row of 2D array matches row 1
+    targetCols=len(targetArray[0])
+    missingCols=targetCols-len(targetArray[-1])
+    newArray=targetArray.tolist()
+    newArray[-1].extend([0]*missingCols)
+    return newArray
+
+def condenseDepthFrame(depthFrame):
+    condensedRow=depthFrame.pop(0)
+    for remainingRows in depthFrame:
+        for i in range(len(remainingRows)):
+            depthValue=remainingRows[i]
+            if depthValue<4000 and depthValue>800:
+                condensedRow[i]=(depthValue if depthValue<condensedRow[i]
+                                            else condensedRow[i])
+    return condensedRow
 
 class KinectHandler(object):
     def __init__(self):
@@ -93,15 +110,11 @@ class KinectHandler(object):
         self.kinectColorStream.close()
 
 
-class humanTracker(threading.Thread):
-    def __init__(self,queue):
-        threading.Thread.__init__(self)
+class humanTracker(object):
+    def __init__(self):
         self.kinect=KinectHandler()
         self.isRunning=True
-        self.playerIndexBits=0
-        self.queue=queue
-    def stop(self):
-        self.isRunning=False
+
     def run(self):
         while self.isRunning:
             #DO STUFF
@@ -110,61 +123,14 @@ class humanTracker(threading.Thread):
             (frame,width,height)=newDepthFrame
             depthContainer=list(copy.deepcopy(frame))
             depthGrid=convertTo2DGrid(depthContainer,width)
-            self.queue.put((depthGrid,width,height))
+            depthGrid=makeArrayRectangular(depthGrid)
+            depthLine=condenseDepthFrame(depthGrid)
+
             if not checkIfKinectConnected():
                 print("Bye!")
                 self.isRunning=False
         self.kinect.end()
-
-
-
-##############################################################################
-#Graphical Debugger
-#Plots 2D array graphically
-##############################################################################
-def makeArrayRectangular(targetArray):
-    #Makes sure last row of 2D array matches row 1
-    targetCols=len(targetArray[0])
-    missingCols=targetCols-len(targetArray[-1])
-    newArray=targetArray.tolist()
-    newArray[-1].extend([0]*missingCols)
-    return np.array(newArray)
-
-
-
-
-def convert2dArrayToImage(newNumpyArray):
-    #Converts 2D grid to redscale image array
-    #Scale numpy array to 255 max (8 bits)
-    maximum=4000
-    scalingFactor=(255/maximum)
-    numpyArray=copy.deepcopy(newNumpyArray)
-    numpyArray=np.array(numpyArray)*scalingFactor
-    Rarray=numpyArray.astype(np.uint8)
-    Garray=np.zeros(numpyArray.shape,np.uint8)
-    Barray=np.zeros(numpyArray.shape,np.uint8)
-    BGRarray=np.stack((Barray,Garray,Rarray),axis=2)
-#    return RGBarray
-    cv2.imwrite('data.jpg',BGRarray)
-
-class depthCamera():
-    #Takes a depth image from the kinect and writes it out to data.jpg.
-    def trackerSetup(self):
-        self.dataStorage=Queue.Queue()
-        self.tracking=humanTracker(self.dataStorage)
-        self.tracking.setDaemon(True)
-        self.tracking.start()
-    def __init__(self):
-        self.trackerSetup()
-        while self.dataStorage.empty():
-            #Wait until data starts arriving
-            pass
-        print("Ready!")
-    def update(self):
-        if not self.dataStorage.empty():
-            (self.dataArray,self.width,self.height)=self.dataStorage.get()
-            self.dataArray=makeArrayRectangular(self.dataArray)
-            convert2dArrayToImage(self.dataArray)
-
-camera=depthCamera()
-camera.update()
+'''
+tracker=humanTracker()
+tracker.run()
+'''
