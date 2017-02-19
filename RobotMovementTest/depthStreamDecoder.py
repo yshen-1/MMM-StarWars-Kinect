@@ -187,7 +187,6 @@ class graphicalDebugger():
         pygame.surfarray.blit_array(self.display,self.image)
         self.display=self.display.convert()
         self.screen.blit(self.display,(0,0))
-        print("Updated!")
     def run(self):
         while self.isRunning:
             (mouseX,mouseY)=pygame.mouse.get_pos()

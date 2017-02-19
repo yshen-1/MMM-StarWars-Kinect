@@ -109,8 +109,8 @@ class KinectHandler(object):
         frame=None
         if self.kinectColorStream.has_new_color_frame():
             frame=self.kinectColorStream.get_last_color_frame()
-            return (frame, self.kinectColorStream.color_frame_desc.Width,
-                    self.kinectColorStream.color_frame_desc.Height)
+        return (frame, self.kinectColorStream.color_frame_desc.Width,
+                self.kinectColorStream.color_frame_desc.Height)
 
     def end(self):
         self.kinectBodyStream.close()
@@ -122,34 +122,23 @@ class humanTracker(object):
     def __init__(self):
         self.kinect=KinectHandler()
         self.isRunning=True
-        self.depthLine=None
-        self.depthFrame=None
-        self.colorFrame=None
-    def getDepthLineAndFrame(self):
-        newDepthFrame=self.kinect.getNewDepthData()
-        while newDepthFrame==None:
-            newDepthFrame=self.kinect.getNewDepthData()
-        (depthFrame,depthWidth,depthHeight)=newDepthFrame
-        depthContainer=list(copy.deepcopy(depthFrame))
-        depthGrid=convertTo2DGrid(depthContainer,depthWidth)
-        depthGrid=makeArrayRectangular(depthGrid)
-        self.depthFrame=copy.deepcopy(depthGrid)
-        self.depthLine=condenseDepthFrame(depthGrid)
-    def getColorFrame(self):
-        newColorFrame=self.kinect.getNewColorData()
-        while newColorFrame==None:
-            newColorFrame=self.kinect.getNewColorData()
-        (colorFrame,colorWidth,colorHeight)=newColorFrame
-        colorRGBFrame=convertColorFrameIntoRGBArray(colorFrame,colorWidth,colorHeight)
-        self.colorFrame=cv2.cvtColor(colorRGBFrame,cv2.COLOR_RGB2BGR)
 
     def run(self):
         while self.isRunning:
             #DO STUFF
+            newDepthFrame=self.kinect.getNewDepthData()
+            newColorFrame=self.kinect.getNewColorData()
+            if newDepthFrame==None or newColorFrame==None: continue
+            (depthFrame,depthWidth,depthHeight)=newDepthFrame
+            (colorFrame,colorWidth,colorHeight)
+            depthContainer=list(copy.deepcopy(depthFrame))
+            depthGrid=convertTo2DGrid(depthContainer,depthWidth)
+            depthGrid=makeArrayRectangular(depthGrid)
+            depthLine=condenseDepthFrame(depthGrid)
+
             if not checkIfKinectConnected():
                 print("Bye!")
                 self.isRunning=False
-
         self.kinect.end()
 
 tracker=humanTracker()
