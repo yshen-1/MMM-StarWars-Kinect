@@ -116,7 +116,7 @@ class KinectHandler(object):
         self.kinectColorStream.close()
 
 
-class humanTracker(object):
+class humanFighter(object):
     def __init__(self):
         self.kinect=KinectHandler()
         self.isRunning=True
@@ -156,34 +156,49 @@ class humanTracker(object):
         self.colorWidth,self.colorHeight=colorWidth,colorHeight
         colorRGBFrame=convertColorFrameIntoRGBArray(colorFrame,colorWidth,colorHeight)
         self.colorFrame=cv2.cvtColor(colorRGBFrame,cv2.COLOR_RGB2BGR)
+    def getPersonLocation(self):
+        posData=self.kinect.getPeoplePosition()
+        while posData==None:
+            posData=self.kinect.getPeoplePosition()
+        return posData
+
+    def goToPerson(self):
+        self.mmm.setWheelVelocity(0,0)
+        self.getColorFrame()
+        coords=self.saberTracker.track(self.colorFrame)
+        if coords==None: continue
+        (colorX,colorY)=coords
+        (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
+                         int(colorY*self.depthHeight/self.colorHeight))
+        distanceToPerson=self.depthFrame[depthY][depthX]
+        while distanceToPerson>900 and distanceToPerson<4000:
+            dist=depthX-self.depthWidth//2
+            while abs(dist)>50: #accuracy threshold
+                if dist>0: self.mmm.setWheelVelocity(0.03,-0.03)
+                else: self.mmm.setWheelVelocity(-0.03,0.03)
+                time.sleep(0.1)
+                self.mmm.setWheelVelocity(0,0)
+                self.getColorFrame()
+                coords=self.saberTracker.track(self.colorFrame)
+                if coords==None: continue
+                (colorX,colorY)=coords
+                (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
+                                 int(colorY*self.depthHeight/self.colorHeight))
+                dist=depthX-self.depthWidth//2
+            self.mmm.setWheelVelocity(0.1,0.1)
+            time.sleep(1)
+            self.mmm.setWheelVelocity(0,0)
+        self.mmm.setWheelVelocity(0,0)
+    def fightPerson(self):
+        (personDist,angle,index)=self.getPersonLocation()
+        while personDist<1500: #If the person is in range (1.5 m)
+
+            (personDist,angle,index)=self.getPersonLocation()
 
     def run(self):
         while self.isRunning:
-            self.getColorFrame()
-            coords=self.saberTracker.track(self.colorFrame)
-            if coords==None: continue
-            (colorX,colorY)=coords
-            (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
-                             int(colorY*self.depthHeight/self.colorHeight))
-            distanceToPerson=self.depthFrame[depthY][depthX]
-            while distanceToPerson>900 and distanceToPerson<4000:
-                dist=depthX-self.depthWidth//2
-                while abs(dist)>50: #accuracy threshold
-                    if dist>0: self.mmm.setWheelVelocity(0.03,-0.03)
-                    else: self.mmm.setWheelVelocity(-0.03,0.03)
-                    time.sleep(0.1)
-                    self.mmm.setWheelVelocity(0,0)
-                    self.getColorFrame()
-                    coords=self.saberTracker.track(self.colorFrame)
-                    if coords==None: continue
-                    (colorX,colorY)=coords
-                    (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
-                                     int(colorY*self.depthHeight/self.colorHeight))
-                    dist=depthX-self.depthWidth//2
-                self.mmm.setWheelVelocity(0.1,0.1)
-                time.sleep(1)
-                self.mmm.setWheelVelocity(0,0)
-            self.mmm.setWheelVelocity(0,0)
+            self.goToPerson()
+            self.fightPerson()
             if not checkIfKinectConnected():
                 print("Bye!")
                 self.isRunning=False
@@ -192,5 +207,5 @@ class humanTracker(object):
         quit()
 
 if __name__=='__main__':
-    tracker=humanTracker()
+    tracker=humanFighter()
     tracker.run()
