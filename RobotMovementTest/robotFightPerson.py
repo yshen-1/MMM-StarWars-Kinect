@@ -125,6 +125,8 @@ class humanFighter(object):
         self.colorFrame=None
         self.colorWidth,self.colorHeight=None,None
         self.depthWidth,self.depthHeight=None,None
+        self.verticalPixelRatio=424/60 #pixels per degree vertically
+        self.horizontalPixelRatio=512/70.6 #pixels per degree horizontally
         self.saberTracker=LightSaberTracker()
         self.mmm=MMM('COM4')
         time.sleep(4)
@@ -192,7 +194,21 @@ class humanFighter(object):
     def fightPerson(self):
         (personDist,angle,index)=self.getPersonLocation()
         while personDist<1500: #If the person is in range (1.5 m)
-
+            self.getColorFrame()
+            self.getDepthLineAndFrame()
+            while personDist<900: #If person is too close, back off!
+                self.mmm.setWheelVelocity(-0.1,-0.1)
+                time.sleep(0.1)
+                (personDist,angle,index)=self.getPersonLocation()
+            self.mmm.setWheelVelocity(0,0)
+            tipCoords=self.saberTracker.track(self.colorFrame)
+            if tipCoords==None: continue
+            (tipColorX,tipColorY)=tipCoords
+            (tipDepthX,tipDepthY)=(int(tipColorX*self.depthWidth/self.colorWidth),
+                                   int(tipColorY*self.depthHeight/self.colorHeight))
+            tipDistanceFromCameraPlane=self.depthFrame[tipDepthY][tipDepthX]
+            xTipPos=(self.depthWidth/2-tipDepthX)/self.horizontalPixelRatio #Degrees from center plane
+            
             (personDist,angle,index)=self.getPersonLocation()
 
     def run(self):
