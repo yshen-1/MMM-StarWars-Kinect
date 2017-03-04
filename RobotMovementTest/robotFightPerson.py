@@ -246,6 +246,8 @@ class humanFighter(object):
         handSpeed=np.linalg.norm(handVelocity)
         #If the person is not swinging the lightsaber and the vectors are not
         #directed at the robot, attack.
+        #The robot's arm is at minimum 20 cm from the main body
+
     def fightPerson(self):
         #@TODO Use time module to assign timestamps to sensor readings
         (personDist,angle,index)=self.getPersonLocation()
