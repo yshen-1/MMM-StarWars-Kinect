@@ -19,4 +19,4 @@ width, height = 300, 300
 
 red = (255, 0, 0)
 image = create_blank(width, height, rgb_color=red)
-cv2.imwrite('red.jpg', image)
+cv2.imwrite('test.jpg', image)
