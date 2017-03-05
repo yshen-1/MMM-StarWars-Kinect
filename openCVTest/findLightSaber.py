@@ -5,7 +5,7 @@ import math
 
 
 
-image = cv2.imread('c:/users/arthur/desktop/blueLightSaberRoom.jpg',1)
+image = cv2.imread('c:/users/arthur/desktop/blueTest1.jpg',1)
 
 
 class LightSaberTracker(object):
@@ -133,21 +133,35 @@ class LightSaberTracker(object):
 
     def getEndPoint(self, endCellPos, grid):
         (row, col) = endCellPos
+        print ('endcellPos',row, col)
         endCell = grid[row][col][0]
         topLeft = endCell[:10, :10]
         botLeft = endCell[10: , :10]
         topRight = endCell[:10, 10:]
         botRight = endCell[10:, 10:]
-        subCells = ((topLeft,(2, 2)),(topRight, (2, 7)), (botRight, (7, 7)),
-                        (botLeft, (7, 2)))
+        subCells = ((topLeft,(0, 0)),(topRight, (0, 10)),(botRight, (10, 10)),
+                        (botLeft, (10, 0)))
         maxAvg = 0
-        (drow, dcol) = (5, 5)
         for (cell, dpos) in subCells:
             avg = np.average(cell) 
             if avg > maxAvg:
                 maxAvg = avg
-                (drow, dcol) = dpos
-        endPoint = (row*20 + drow , col*20 + dcol)
+                endSubCell = cell
+                endSubCelldpos = dpos
+        found = False
+        for row1 in range(10):
+            for col1 in range(10):
+                pixel = endSubCell[row1][col1] 
+                if pixel != 0:
+                    pixeldPos = (row1, col1)
+                    found = True
+                    break
+            if found:
+                break
+        endRow = row*20 + endSubCelldpos[0] + pixeldPos[0]
+        endCol = col*20 + endSubCelldpos[1] + pixeldPos[1]
+        endPoint = (endRow, endCol)
+        print('endPoint', endPoint)
         return endPoint
 
     def getDistance(self, point1, point2):
@@ -188,7 +202,7 @@ class LightSaberTracker(object):
    
 
 tracker = LightSaberTracker('blue')
-tracker.track(image, (770, 990))
+tracker.track(image, (480, 980))
 
 
 
