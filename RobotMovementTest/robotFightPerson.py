@@ -145,6 +145,8 @@ class humanFighter(object):
         self.verticalPixelRatio=424/60 #pixels per degree vertically
         self.horizontalPixelRatio=512/70.6 #pixels per degree horizontally
         self.saberTracker=LightSaberTracker()
+        self.kinectX=0.1 #m between kinect and anatomical right side of robot
+        self.kinectY=1 #m from kinect to ground
         self.mmm=MMM('COM4')
         time.sleep(4)
         self.mainThread=threading.Thread(target=self.updateRobot, args=())
@@ -201,9 +203,12 @@ class humanFighter(object):
         coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
         while coords==None:
             coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
-        (colorX,colorY)=coords
+        (colorY,colorX)=coords[1]
+        (endColorY,endColorX)=coords[0]
         (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
-                         int(colorY*self.depthHeight/self.colorHeight))
+                               int(colorY*self.depthHeight/self.colorHeight))
+        (endDepthX,endDepthY)=(int(endColorX*self.depthWidth/self.colorWidth),
+                               int(endColorY*self.depthHeight/self.colorHeight))
         distanceToPerson=self.depthFrame[depthY][depthX]
         while distanceToPerson>900 and distanceToPerson<4000:
             dist=depthX-self.depthWidth//2
@@ -228,13 +233,39 @@ class humanFighter(object):
                 colX=int(colX*self.colorWidth/self.depthWidth)
                 coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
                 if coords==None: continue
-                (colorX,colorY)=coords
+                (colorY,colorX)=coords[1]
+                (endColorY,endColorX)=coords[0]
                 (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
-                                 int(colorY*self.depthHeight/self.colorHeight))
+                                       int(colorY*self.depthHeight/self.colorHeight))
+                (endDepthX,endDepthY)=(int(endColorX*self.depthWidth/self.colorWidth),
+                                       int(endColorY*self.depthHeight/self.colorHeight))
                 dist=depthX-self.depthWidth//2
             self.mmm.setWheelVelocity(0.1,0.1)
             time.sleep(1)
             self.mmm.setWheelVelocity(0,0)
+            self.getColorFrame()
+            self.getDepthLineAndFrame()
+            wristPos=self.kinect.getRightWristPosition()
+            if wristPos==None: continue
+            (wristX,wristY,wristZ)=wristPos
+            colX=((self.depthWidth/2)-(wristX/np.abs(wristX))*
+                   self.horizontalPixelRatio*(math.atan(np.abs(wristX)/wristZ))*(180/math.pi))
+            colX=int(colX)
+            rowY=((self.depthHeight/2)+(wristY/np.abs(wristY))*
+                   self.verticalPixelRatio*(math.atan(np.abs(wristY)/wristZ))*(180/math.pi))
+            rowY=int(rowY)
+            rowY=self.depthHeight-rowY
+            rowY=int(rowY*self.colorHeight/self.depthHeight)
+            colX=int(colX*self.colorWidth/self.depthWidth)
+            coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
+            if coords==None: continue
+            (colorY,colorX)=coords[1]
+            (endColorY,endColorX)=coords[0]
+            (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
+                                   int(colorY*self.depthHeight/self.colorHeight))
+            (endDepthX,endDepthY)=(int(endColorX*self.depthWidth/self.colorWidth),
+                                   int(endColorY*self.depthHeight/self.colorHeight))
+            distanceToPerson=self.depthFrame[depthY][depthX]
         self.mmm.setWheelVelocity(0,0)
     def respondToMove(self,tipInitPos,tipVector,handInitPos,handVector,prevTime,sampleTime):
         samplingTime=sampleTime-prevTime
@@ -247,7 +278,13 @@ class humanFighter(object):
         #If the person is not swinging the lightsaber and the vectors are not
         #directed at the robot, attack.
         #The robot's arm is at minimum 20 cm from the main body
-
+        #Project both hand and tip vectors to the plane (0,0,20 cm)
+        handDirection=handVelocity/handSpeed
+        tipDirection=tipVelocity/tipSpeed
+        handMultiplier=(0.2-handInitPosition[2])/handDirection[2]
+        handVectorToRobot=handMultiplier*handDirection
+        tipMultiplier=(0.2-tipInitPos[2])/tipDirection[2]
+        tipVectorToRobot=tipMultiplier*tipDirection
     def fightPerson(self):
         #@TODO Use time module to assign timestamps to sensor readings
         (personDist,angle,index)=self.getPersonLocation()
@@ -280,9 +317,12 @@ class humanFighter(object):
             colX=int(colX*self.colorWidth/self.depthWidth)
             tipCoords=self.saberTracker.track(self.colorFrame,(rowY,colX))
             if tipCoords==None: continue
-            (tipColorX,tipColorY)=tipCoords
+            (tipColorY,tipColorX)=tipCoords[1]
+            (endColorY,endColorX)=tipCoords[0]
             (tipDepthX,tipDepthY)=(int(tipColorX*self.depthWidth/self.colorWidth),
                                    int(tipColorY*self.depthHeight/self.colorHeight))
+            (endDepthX,endDepthY)=(int(endColorX*self.depthWidth/self.colorWidth),
+                                   int(endColorY*self.depthHeight/self.colorHeight))
             tipDistanceFromCameraPlane=self.depthFrame[tipDepthY][tipDepthX]
             tipDepthY=self.depthHeight-tipDepthY
             #xTipPos,xDistance>0 if person to the left of Kinect, else <0
