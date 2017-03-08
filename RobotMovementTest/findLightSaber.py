@@ -4,10 +4,6 @@ import numpy as np
 import math
 
 
-
-image = cv2.imread('c:/users/arthur/desktop/blueTest1.jpg',1)
-
-
 class LightSaberTracker(object):
     def __init__(self, saberColor = 'blue'):
         self.saberColor = saberColor
@@ -136,7 +132,6 @@ class LightSaberTracker(object):
 
     def getEndPoint(self, endCellPos, grid):
         (row, col) = endCellPos
-        print ('endcellPos',row, col)
         endCell = grid[row][col][0]
         topLeft = endCell[:10, :10]
         botLeft = endCell[10: , :10]
@@ -146,7 +141,7 @@ class LightSaberTracker(object):
                         (botLeft, (10, 0)))
         maxAvg = 0
         for (cell, dpos) in subCells:
-            avg = np.average(cell) 
+            avg = np.average(cell)
             if avg > maxAvg:
                 maxAvg = avg
                 endSubCell = cell
@@ -154,7 +149,7 @@ class LightSaberTracker(object):
         found = False
         for row1 in range(10):
             for col1 in range(10):
-                pixel = endSubCell[row1][col1] 
+                pixel = endSubCell[row1][col1]
                 if pixel != 0:
                     pixeldPos = (row1, col1)
                     found = True
@@ -164,7 +159,6 @@ class LightSaberTracker(object):
         endRow = row*20 + endSubCelldpos[0] + pixeldPos[0]
         endCol = col*20 + endSubCelldpos[1] + pixeldPos[1]
         endPoint = (endRow, endCol)
-        print('endPoint', endPoint)
         return endPoint
 
     def getDistance(self, point1, point2):
@@ -176,7 +170,7 @@ class LightSaberTracker(object):
     # Debug:
     ###############
     def debugInit(self):
-        self.debugOn = True
+        self.debugOn = False
         self.imageDebugDir = r'C:/Users/Arthur/Desktop/RoboticsClub/MMM-StarWars-Kinect/openCVTest'
 
     def debugShow(self, isolated, startPoint, endPoint):
@@ -190,7 +184,7 @@ class LightSaberTracker(object):
             cv2.imwrite(self.imageDebugDir + r"/isolatedTracked.png", isolated)
             cv2.imwrite(self.imageDebugDir + r'/frameTracked.png', self.frame)
             cv2.waitKey(0)
-            cv2.destroyAllWindows() 
+            cv2.destroyAllWindows()
 
     def showPoint(self, point, image, color = 'R'):
         colorValues = {'B':0, 'G':1, 'R':2}
@@ -217,12 +211,3 @@ class LightSaberTracker(object):
         if h2e == 0 or (sPDeviation / h2e > 0.1):
             return False
         return True
-
-
-
-   
-
-
-
-
-

@@ -88,7 +88,7 @@ class KinectHandler(object):
         if self.kinectBodyStream.has_new_body_frame():
             bodies=self.kinectBodyStream.get_last_body_frame()
         if bodies!=None:
-            for i in range(0,kinect.max_body_count):
+            for i in range(0,self.kinectBodyStream.max_body_count):
                 body=bodies.bodies[i]
                 if body.is_tracked:
                     joints=body.joints
@@ -171,6 +171,7 @@ class humanTracker(threading.Thread):
         rowY=self.depthHeight-rowY
         rowY=int(rowY*self.colorHeight/self.depthHeight)
         colX=int(colX*self.colorWidth/self.depthWidth)
+        print("Wrist Position:",rowY,colX)
         coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
         while coords==None:
             coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
@@ -192,7 +193,13 @@ class humanTracker(threading.Thread):
             (distanceToPerson, depthX, depthY, endDepthX, endDepthY, endColorY,endColorX, wristX,wristY, wristZ)=self.getTipAndHandData()
             #colorContainer=list(copy.deepcopy(frame))
             #depthGrid=convertTo2DGrid(depthContainer,width)
-            self.queue.put((frame,width,height))
+            print("Distance:",distanceToPerson)
+            mutableFrame=convertColorFrameIntoRGBArray(frame,width,height).tolist()
+            for i in range(endColorY-10,endColorY+10):
+                for j in range(endColorX-10,endColorX+10):
+                    mutableFrame[i][j]=[255,0,0]
+            mutableFrame=np.array(mutableFrame)
+            self.queue.put((mutableFrame,width,height))
             self.queue.join()
             if not checkIfKinectConnected():
                 print("Bye!")
@@ -221,7 +228,7 @@ class graphicalDebugger():
             pass
         (self.dataArray,self.width,self.height)=self.dataStorage.get()
         self.dataStorage.task_done()
-        self.image=convertColorFrameIntoRGBArray(self.dataArray,self.width,self.height)
+        self.image=self.dataArray
         self.image=np.rot90(self.image,k=5)
         self.screen=pygame.display.set_mode((self.width,self.height))
         self.overlay=pygame.Surface((self.width,self.height))
@@ -234,9 +241,10 @@ class graphicalDebugger():
 
     def timerFired(self):
         if not self.dataStorage.empty():
+            print("New data received!")
             (self.dataArray,self.width,self.height)=self.dataStorage.get()
             self.dataStorage.task_done()
-            self.image=convertColorFrameIntoRGBArray(self.dataArray,self.width,self.height)
+            self.image=self.dataArray
             self.image=np.rot90(self.image,k=5)
     def drawAll(self):
         #rotate image array 90 degrees clockwise

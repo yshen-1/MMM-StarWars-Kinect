@@ -111,7 +111,7 @@ class KinectHandler(object):
         if self.kinectBodyStream.has_new_body_frame():
             bodies=self.kinectBodyStream.get_last_body_frame()
         if bodies!=None:
-            for i in range(0,kinect.max_body_count):
+            for i in range(0,self.kinectBodyStream.max_body_count):
                 body=bodies.bodies[i]
                 if body.is_tracked:
                     joints=body.joints
@@ -155,7 +155,7 @@ class EnemyTracker(object):
         self.kinect = darthVader.kinectHandler
         self.enemy = enemy
         self.enemy
-        
+
 
 
 
