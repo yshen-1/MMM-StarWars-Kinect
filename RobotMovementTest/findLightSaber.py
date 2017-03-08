@@ -21,7 +21,11 @@ class LightSaberTracker(object):
         self.frame = frame
         self.handPosition = handPosition
         isolated = self.isolateSaberColor(frame)
-        startPoint, endPoint = self.findLightSaber(isolated, handPosition)
+        trackedPoints = self.findLightSaber(isolated, handPosition)
+        if trackedPoints == None:
+            return None
+        else:
+            startPoint, endPoint = trackedPoints
         self.debugShow(isolated, startPoint, endPoint)
         if self.check(handPosition, startPoint, endPoint):
             return startPoint, endPoint
@@ -43,10 +47,14 @@ class LightSaberTracker(object):
     def findLightSaber(self, image, handPosition):
         grid = self.getGrid(image)
         startCellPos = self.startCellPos(handPosition, grid)
+        if startCellPos == None:
+            return None
         startPoint = self.getEndPoint(startCellPos, grid)
         results = []
         self.getSaberCells(grid, startCellPos, results)
         endCellPos = self.getEndCellPos(results, startCellPos)
+        if endCellPos == None:
+            return None
         endPoint = self.getEndPoint(endCellPos, grid)
         return startPoint, endPoint
 
