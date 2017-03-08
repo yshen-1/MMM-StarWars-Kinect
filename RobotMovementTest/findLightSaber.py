@@ -19,6 +19,7 @@ class LightSaberTracker(object):
         isolated = self.isolateSaberColor(frame)
         trackedPoints = self.findLightSaber(isolated, handPosition)
         if trackedPoints == None:
+            print('EndPoints not found')
             return None
         else:
             startPoint, endPoint = trackedPoints
@@ -26,6 +27,7 @@ class LightSaberTracker(object):
         if self.check(handPosition, startPoint, endPoint):
             return startPoint, endPoint
         else:
+            print('saber check failed')
             return None
 
     def isolateSaberColor(self, frame):
