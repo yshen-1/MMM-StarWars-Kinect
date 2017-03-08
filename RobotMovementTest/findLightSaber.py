@@ -2,6 +2,7 @@ from __future__ import print_function,division
 import cv2
 import numpy as np
 import math
+import time
 
 
 
@@ -217,6 +218,14 @@ class LightSaberTracker(object):
         if h2e == 0 or (sPDeviation / h2e > 0.1):
             return False
         return True
+
+    def trackWithRuntime(self, frame, handPosition):
+        startTime = time.time()
+        trackValues = self.track(frame, handPosition)
+        endTime = time.time()
+        delay = (endTime - startTime)
+        print('delay:',delay)
+        return trackValues
 
 
 
