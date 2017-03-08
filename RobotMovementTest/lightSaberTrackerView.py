@@ -190,15 +190,17 @@ class humanTracker(threading.Thread):
             newColorFrame=self.kinect.getNewColorData()
             if newColorFrame==None: continue
             (frame,width,height)=newColorFrame
+            newFrame=copy.deepcopy(frame)
             (distanceToPerson, depthX, depthY, endDepthX, endDepthY, endColorY,endColorX, wristX,wristY, wristZ)=self.getTipAndHandData()
             #colorContainer=list(copy.deepcopy(frame))
             #depthGrid=convertTo2DGrid(depthContainer,width)
             print("Distance:",distanceToPerson)
-            mutableFrame=convertColorFrameIntoRGBArray(frame,width,height).tolist()
+            mutableFrame=convertColorFrameIntoRGBArray(newFrame,width,height).tolist()
             for i in range(endColorY-10,endColorY+10):
                 for j in range(endColorX-10,endColorX+10):
                     mutableFrame[i][j]=[255,0,0]
             mutableFrame=np.array(mutableFrame)
+            mutableFrame=cv2.cvtColor(mutableFrame,cv2.COLOR_BGR2RGB)
             self.queue.put((mutableFrame,width,height))
             self.queue.join()
             if not checkIfKinectConnected():

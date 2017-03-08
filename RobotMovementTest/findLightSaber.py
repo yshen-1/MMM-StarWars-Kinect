@@ -2,6 +2,7 @@ from __future__ import print_function,division
 import cv2
 import numpy as np
 import math
+import time
 
 
 class LightSaberTracker(object):
@@ -16,7 +17,11 @@ class LightSaberTracker(object):
         self.frame = frame
         self.handPosition = handPosition
         isolated = self.isolateSaberColor(frame)
-        startPoint, endPoint = self.findLightSaber(isolated, handPosition)
+        trackedPoints = self.findLightSaber(isolated, handPosition)
+        if trackedPoints == None:
+            return None
+        else:
+            startPoint, endPoint = trackedPoints
         self.debugShow(isolated, startPoint, endPoint)
         if self.check(handPosition, startPoint, endPoint):
             return startPoint, endPoint
@@ -38,10 +43,14 @@ class LightSaberTracker(object):
     def findLightSaber(self, image, handPosition):
         grid = self.getGrid(image)
         startCellPos = self.startCellPos(handPosition, grid)
+        if startCellPos == None:
+            return None
         startPoint = self.getEndPoint(startCellPos, grid)
         results = []
         self.getSaberCells(grid, startCellPos, results)
         endCellPos = self.getEndCellPos(results, startCellPos)
+        if endCellPos == None:
+            return None
         endPoint = self.getEndPoint(endCellPos, grid)
         return startPoint, endPoint
 
@@ -211,3 +220,12 @@ class LightSaberTracker(object):
         if h2e == 0 or (sPDeviation / h2e > 0.1):
             return False
         return True
+
+
+    def trackWithRuntime(self, frame, handPosition):
+        startTime = time.time()
+        trackValues = self.track(frame, handPosition)
+        endTime = time.time()
+        delay = (endTime - startTime)
+        print('delay:',delay)
+        return trackValues
