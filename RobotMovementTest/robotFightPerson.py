@@ -76,6 +76,12 @@ def convertColorFrameIntoRGBArray(frame,width,height):
     RGBframe=np.reshape(RGBframe,(height,width,3))
     return RGBframe
 
+class DarthVader(object):
+    def __init__(self):
+        self.kinectHandler = KinectHandler()
+        self.enemyTracker = EnemyTracker(self)
+        self.enemyFighter = EnemyFighter(self)
+
 class KinectHandler(object):
     def __init__(self):
         self.kinectBodyStream=PyKinectRuntime.PyKinectRuntime(
@@ -133,10 +139,29 @@ class KinectHandler(object):
         self.kinectDepthStream.close()
         self.kinectColorStream.close()
 
+class ReferenceFrame(object):
+    def __init__(self, name = None, parent = None)
+        self.name = name
+        self.parent = parent
 
-class humanFighter(object):
-    def __init__(self):
-        self.kinect=KinectHandler()
+    def addChild(self, childName, childPos, childMovement):
+        self.child = referenceFrame(childName, self)
+        self.childPos = childPos
+        self.childMovement = childMovement
+        return self.child
+
+class EnemyTracker(object):
+    def __init__(self, darthVader, enemy):
+        self.kinect = darthVader.kinectHandler
+        self.enemy = enemy
+        self.enemy
+        
+
+
+
+class EnemyFighter(object):
+    def __init__(self, darthVader):
+        self.kinect = darthVader.kinectHandler
         self.isRunning=True
         self.depthLine=None
         self.depthFrame=None
@@ -367,5 +392,6 @@ class humanFighter(object):
         quit()
 
 if __name__=='__main__':
-    tracker=humanFighter()
+    darthVader = DarthVader()
+    tracker=darthVader.enemyFighter
     tracker.run()
