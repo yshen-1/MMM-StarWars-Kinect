@@ -111,24 +111,28 @@ class KinectHandler(object):
             return (frame, self.kinectColorStream.color_frame_desc.Width,
                     self.kinectColorStream.color_frame_desc.Height)
 
+    def convertColorToDepth(self,depthFrame,refToLargeArray):
+        self.kinectDepthStream.color_frame_to_camera_space(depthFrame,refToLargeArray)
+
     def end(self):
         self.kinectBodyStream.close()
         self.kinectDepthStream.close()
         self.kinectColorStream.close()
 
-class humanTracker(threading.Thread):
-    def __init__(self,queue):
-        threading.Thread.__init__(self)
+class humanTracker():
+    def __init__(self):
         self.kinect=KinectHandler()
         self.isRunning=True
         self.playerIndexBits=0
-        self.queue=queue
         self.depthWidth,self.depthHeight=None,None
         self.depthFrame=None
+        self.originalDepthFrame=None
         self.colorWidth,self.colorHeight=None, None
         self.colorFrame=None
-        self.verticalPixelRatio=424/60 #pixels per degree vertically
-        self.horizontalPixelRatio=512/70.6 #pixels per degree horizontally
+        self.verticalDepthPixelRatio=424/60 #pixels per degree vertically
+        self.horizontalDepthPixelRatio=512/70.6 #pixels per degree horizontally
+        self.verticalColorPixelRatio=1080/53.8 #pixels per degree vertically
+        self.horizontalColorPixelRatio=1920/84.1 #pixels per degree horizontally
         self.saberTracker=LightSaberTracker()
     def stop(self):
         self.isRunning=False
@@ -137,7 +141,9 @@ class humanTracker(threading.Thread):
         while newDepthFrame==None:
             newDepthFrame=self.kinect.getNewDepthData()
         (depthFrame,depthWidth,depthHeight)=newDepthFrame
+        print("New depth frame acquired!")
         self.depthWidth,self.depthHeight=depthWidth,depthHeight
+        self.originalDepthFrame=depthFrame
         depthContainer=list(copy.deepcopy(depthFrame))
         depthGrid=convertTo2DGrid(depthContainer,depthWidth)
         depthGrid=makeArrayRectangular(depthGrid)
@@ -149,125 +155,58 @@ class humanTracker(threading.Thread):
         (colorFrame,colorWidth,colorHeight)=newColorFrame
         self.colorWidth,self.colorHeight=colorWidth,colorHeight
         colorRGBFrame=convertColorFrameIntoRGBArray(colorFrame,colorWidth,colorHeight)
-        self.colorFrame=cv2.cvtColor(colorRGBFrame,cv2.COLOR_RGB2BGR)
-    def getPersonLocation(self):
-        posData=self.kinect.getPeoplePosition()
-        while posData==None:
-            posData=self.kinect.getPeoplePosition()
-        return posData
+        self.colorFrame=copy.deepcopy(colorRGBFrame)#cv2.cvtColor(colorRGBFrame,cv2.COLOR_RGB2BGR)
+
     def getTipAndHandData(self):
-        self.getColorFrame()
-        self.getDepthLineAndFrame()
         wristPos=self.kinect.getRightWristPosition()
         while wristPos==None:
             wristPos=self.kinect.getRightWristPosition()
         (wristX,wristY,wristZ)=wristPos
-        colX=((self.depthWidth/2)-(wristX/np.abs(wristX))*
-               self.horizontalPixelRatio*(math.atan(np.abs(wristX)/wristZ))*(180/math.pi))
-        colX=int(colX)
-        rowY=((self.depthHeight/2)+(wristY/np.abs(wristY))*
-               self.verticalPixelRatio*(math.atan(np.abs(wristY)/wristZ))*(180/math.pi))
+        print("Wrist relative to kinect center: ",wristPos)
+        self.getColorFrame()
+        self.getDepthLineAndFrame()
+        kinectCameraOffset=9.5/100
+        wristCameraPos=(wristX+kinectCameraOffset,wristY,wristZ)
+        colX=((self.colorWidth/2)-(wristX/np.abs(wristX))*
+               self.horizontalColorPixelRatio*(math.atan(np.abs(wristX)/wristZ))*(180/math.pi))
+        colX=self.colorWidth-int(colX)
+        rowY=((self.colorHeight/2)-(wristY/np.abs(wristY))*
+               self.verticalColorPixelRatio*(math.atan(np.abs(wristY)/wristZ))*(180/math.pi))
         rowY=int(rowY)
-        rowY=self.depthHeight-rowY
-        rowY=int(rowY*self.colorHeight/self.depthHeight)
-        colX=int(colX*self.colorWidth/self.depthWidth)
-        print("Wrist Position:",rowY,colX)
+        cv2.imwrite("ColorImageTaken.PNG",self.colorFrame)
         coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
-        while coords==None:
-            coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
-        (colorY,colorX)=coords[1]
-        (endColorY,endColorX)=coords[0]
-        (depthX,depthY)=(int(colorX*self.depthWidth/self.colorWidth),
-                               int(colorY*self.depthHeight/self.colorHeight))
-        (endDepthX,endDepthY)=(int(endColorX*self.depthWidth/self.colorWidth),
-                               int(endColorY*self.depthHeight/self.colorHeight))
+        self.getDepthLineAndFrame()
+        if coords==None: return None
+        (tipColorY,tipColorX)=coords[1]
+        (startingColorY,startingColorX)=coords[0]
+        transformedColorFrame=[[0]*1920 for i in range(1080)]
+        print("Saber start: ",startingColorY,startingColorX)
+        print("Saber tip: ",tipColorY,tipColorX)
+
+
+        #b=raw_input("Press enter to continue.")
+        '''
+        tipXDiff=self.colorWidth/2-tipColorX
+        colorXAngle=np.abs(tipXDiff)/self.horizontalColorPixelRatio #Degrees
+
         distanceToPerson=self.depthFrame[endDepthY][endDepthX]
-        return (distanceToPerson, depthX, depthY, endDepthX, endDepthY, endColorY,endColorX, wristX,wristY, wristZ)
+        return (distanceToPerson, depthX, depthY, endDepthX, endDepthY, endColorY,endColorX, wristX,wristY, wristZ, rowY,colX)
+        '''
 
     def run(self):
         while self.isRunning:
             #DO STUFF
-            newColorFrame=self.kinect.getNewColorData()
-            if newColorFrame==None: continue
-            (frame,width,height)=newColorFrame
-            newFrame=copy.deepcopy(frame)
-            (distanceToPerson, depthX, depthY, endDepthX, endDepthY, endColorY,endColorX, wristX,wristY, wristZ)=self.getTipAndHandData()
+            #(distanceToPerson, depthX, depthY, endDepthX, endDepthY, endColorY,endColorX, wristX,wristY, wristZ,wristRow,wristCol)=self.getTipAndHandData()
             #colorContainer=list(copy.deepcopy(frame))
             #depthGrid=convertTo2DGrid(depthContainer,width)
-            print("Distance:",distanceToPerson)
-            mutableFrame=convertColorFrameIntoRGBArray(newFrame,width,height).tolist()
-            for i in range(endColorY-10,endColorY+10):
-                for j in range(endColorX-10,endColorX+10):
-                    mutableFrame[i][j]=[255,0,0]
-            mutableFrame=np.array(mutableFrame)
-            mutableFrame=cv2.cvtColor(mutableFrame,cv2.COLOR_BGR2RGB)
-            self.queue.put((mutableFrame,width,height))
-            self.queue.join()
+            #print("Distance:",distanceToPerson)
+            self.getTipAndHandData()
             if not checkIfKinectConnected():
                 print("Bye!")
                 self.isRunning=False
         self.kinect.end()
 
 
-
-##############################################################################
-#Graphical Debugger
-#Plots 2D array graphically
-##############################################################################
-
-
-class graphicalDebugger():
-    def trackerSetup(self):
-        self.dataStorage=Queue.Queue()
-        self.tracking=humanTracker(self.dataStorage)
-        self.tracking.setDaemon(True)
-        self.tracking.start()
-    def __init__(self):
-        pygame.init()
-        self.trackerSetup()
-        while self.dataStorage.empty():
-            #Wait until data starts arriving
-            pass
-        (self.dataArray,self.width,self.height)=self.dataStorage.get()
-        self.dataStorage.task_done()
-        self.image=self.dataArray
-        self.image=np.rot90(self.image,k=5)
-        self.screen=pygame.display.set_mode((self.width,self.height))
-        self.overlay=pygame.Surface((self.width,self.height))
-        self.overlay.fill((0,0,0))
-        self.display=pygame.Surface((self.width,self.height))
-        self.display.fill((0,0,0))
-        self.display=self.display.convert()
-        self.overlay=self.overlay.convert()
-        self.isRunning=True
-
-    def timerFired(self):
-        if not self.dataStorage.empty():
-            print("New data received!")
-            (self.dataArray,self.width,self.height)=self.dataStorage.get()
-            self.dataStorage.task_done()
-            self.image=self.dataArray
-            self.image=np.rot90(self.image,k=5)
-    def drawAll(self):
-        #rotate image array 90 degrees clockwise
-        #Rotation required by pygame (surface array is [x][y] while image is
-        #[y][x])
-        self.screen.blit(self.overlay,(0,0))
-        pygame.surfarray.blit_array(self.display,self.image)
-        self.display=self.display.convert()
-        self.screen.blit(self.display,(0,0))
-    def run(self):
-        while self.isRunning:
-            for event in pygame.event.get():
-                if event.type==pygame.QUIT:
-                    self.isRunning=False
-                elif event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE:
-                    self.isRunning=False
-            self.drawAll()
-            self.timerFired()
-            pygame.display.update()
-        pygame.quit()
-        self.tracking.stop()
-
-debugger=graphicalDebugger()
-debugger.run()
+if __name__=='__main__':
+    debugger=humanTracker()
+    debugger.run()

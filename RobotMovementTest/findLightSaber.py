@@ -184,7 +184,7 @@ class LightSaberTracker(object):
     ###############
     def debugInit(self):
         self.debugOn = False
-        self.imageDebugDir = r'C:/Users/Arthur/Desktop/RoboticsClub/MMM-StarWars-Kinect/openCVTest'
+        self.imageDebugDir = r'C:/Users/Danny/Documents/CMU/MMM/Python 27/KinectTestCode/MMM-StarWars-Kinect/RobotMovementTest'
 
     def debugShow(self, isolated, startPoint, endPoint):
         if self.debugOn:
