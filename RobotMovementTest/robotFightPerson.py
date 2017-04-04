@@ -79,6 +79,7 @@ def convertColorFrameIntoRGBArray(frame,width,height):
 class DarthVader(object):
     def __init__(self):
         self.kinectHandler = KinectHandler()
+        self.saberTracker = LightSaberTracker()
         self.enemyTracker = EnemyTracker(self)
         self.enemyFighter = EnemyFighter(self)
 
@@ -106,19 +107,32 @@ class KinectHandler(object):
                     theta =  math.atan(hipX/hipZ)
                     playerIndex = bodies.bodies.index(body)
                     return (distanceToUser, theta, playerIndex)
+
     def getRightWristPosition(self):
         bodies=None
         if self.kinectBodyStream.has_new_body_frame():
             bodies=self.kinectBodyStream.get_last_body_frame()
         if bodies!=None:
-            for i in range(0,self.kinectBodyStream.max_body_count):
+            wrists = []
+            for i in range(0,kinect.max_body_count):
                 body=bodies.bodies[i]
                 if body.is_tracked:
                     joints=body.joints
                     rightWristX=joints[PyKinectV2.JointType_WristRight].Position.x
                     rightWristY=joints[PyKinectV2.JointType_WristRight].Position.y
                     rightWristZ=joints[PyKinectV2.JointType_WristRight].Position.z
-                    return rightWristX,rightWristY,rightWristZ #in meters
+                    wristsPos =(rightWristX,rightWristY,rightWristZ) #in meters
+
+    def getUsefulJointsPosition(self, body):
+        if body == None:
+            return None
+        joints = body.joints
+        rWrist = joints[PyKinectV2.JointType_WristRight]
+        rElbow = joints[PyKinectV2.JointType_ElbowRight]
+        rShoulder = joints[PyKinectV2.JointType_ShoulderRight]
+        Spine = joints[PyKinectV2.JointType_SpineShoulder]
+        return (rWrist, rElbow, rShoulder, Spine)
+
     def getNewDepthData(self):
         #Returns 1D numpy array of 2 byte objects
         frame=None
@@ -140,21 +154,101 @@ class KinectHandler(object):
         self.kinectColorStream.close()
 
 class ReferenceFrame(object):
-    def __init__(self, name = None, parent = None)
+    def __init__(self, name = None, parent = None, position=None)
         self.name = name
+        self.position = position
         self.parent = parent
+        self.updateDistanceToParent()
+        self.updateRelativePosToParent()
 
-    def addChild(self, childName, childPos, childMovement):
-        self.child = referenceFrame(childName, self)
-        self.childPos = childPos
-        self.childMovement = childMovement
+    def getDistance(self, point1, point2):
+        (x1, y1) = point1
+        (x2, y2) = point2
+        return ((x1-x2)**2 +(y1-y2)**2)**0.5
+
+    def updateDistanceToParent(self):
+        if self.parent != None:
+            self.distanceToParent = self.getDistance(self.parent.position, self.position)
+        else:
+            self.distanceToParent = self.getDistance((0, 0, 0), self.position)
+
+    def updateRelativePosToParent(self):
+        if self.parent != None
+            (px, py, pz) = self.parent.position
+            (x, y, z) = self.position
+            self.relativePosToParent = (x-px, y-py, z-pz)
+        else:
+            self.relativePosToParent = self.position
+
+    def updatePosition(self, newPos):
+        self.prevPos = self.position
+        self.prevDistanceToParent = self.distanceToParent
+        self.prevRelativePosToParent = self.relativePosToParent
+        self.position = newPos
+        self.updateDistanceToParent()
+        self.updateRelativePosToParent()
+        self.updateDisplacementVector()
+
+    def updateDisplacementVector(self):
+        (x, y, z)=self.position
+        (px,py,pz) = self.prevPos
+        self.displacementVector =(x-px, y-py, z-pz)
+
+    def getMovement(self):
+        if self.parent != None:
+            (parentTranslation, parentRotation) = self.parent.getMovement()
+        
+
+
+    def addChild(self, childName, childPos):
+        self.child = ReferenceFrame(name = childName,parent = self, position = childPos)
         return self.child
 
+class Enemy(object):
+    def __init__(self, enemyBody)
+        # body is a kinect object
+        self.body = enemyBody
+        
+    def updateJointsPos(self, jointsPos):
+        rWrist, rElbow, rShoulder, Spine = jointsPos
+        self.rWristPos = rWrist
+        self.rElbowPos = rElbow
+        self.rShoulderPos = rShoulder
+        self.spinePos = spine
+
+    def makeReferencePoints(self, jointsPos, saberStartPos, saberEndPos)
+        self.updateJointsPos(JointPos)
+        self.spine = ReferenceFrame(name = 'spine',position = self.spinePos)
+        self.rShoulder = self.spine.addChild('rShoulder', self.rShoulderPos)
+        self.rElbow = self.rShoulder.addChild('rElbow', self.rElbowPos)
+        self.rWrist = self.rElbow.addChild('rWrist', self.rWristPos)
+        self.saberStart = self.rWrist.addChild('saberStart', saberStartPos)
+        self.saberEnd = self.rWrist.addChild('saberEnd', saberEndPos)
+
+
 class EnemyTracker(object):
-    def __init__(self, darthVader, enemy):
+    def __init__(self, darthVader):
         self.kinect = darthVader.kinectHandler
-        self.enemy = enemy
-        self.enemy
+        self.saberTracker = darthVader.saberTracker
+        self.enemy = None
+
+    def findEnemy(self):
+        for body in self.kinect.kinectBodyStream.get_last_body_frame():
+            value = self.kinect.getTipAndHandData(body)
+            if value == None:
+                continue
+            else:
+                (saberStartPos, saberEndPos) = value
+                self.makeEnemy(body,saberStartPos, saberEndPos)
+
+    def makeEnemy(self,enemyBody,saberStartPos, saberEndPos):
+        #To Do: find enemy based on wether a kinect body holds a lightSaber
+        self.enemy = Enemy(enemyBody)
+        jointsPos = self.kinect.getUsefulJointsPosition(self.enemy.body)
+        self.enemy.makeReferencePoints(jointsPos, saberStartPos, saberEndPos)
+
+    def trackEnemyMovement(self):
+
 
 
 
@@ -209,6 +303,10 @@ class EnemyFighter(object):
             posData=self.kinect.getPeoplePosition()
         return posData
     def getTipAndHandData(self):
+        # @ToDo: Move to KinectHandler
+        # arguments : kinect body object
+        # return Value : if found:(saberStartPosition, saberEndPosition)
+        #                else : None
         self.getColorFrame()
         self.getDepthLineAndFrame()
         wristPos=self.kinect.getRightWristPosition()

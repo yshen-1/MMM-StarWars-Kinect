@@ -120,6 +120,8 @@ class LightSaberTracker(object):
     def getSaberCellsDirected(self, grid, cellPos, direction, results):
         (row, col) = cellPos
         (drow, dcol) = direction
+        if row+drow >= 54 or row+drow < 0 or col+dcol >= 96 or col+dcol < 0:
+            return False
         newCell, visited = grid[row+drow][col+dcol]
         colorAvg = np.average(newCell)
         if colorAvg < 5 or visited:
