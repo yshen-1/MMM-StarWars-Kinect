@@ -124,7 +124,7 @@ class humanTracker():
         self.kinect=KinectHandler()
         self.isRunning=True
         self.playerIndexBits=0
-        self.depthWidth,self.depthHeight=None,None
+        self.depthWidth,self.depthHeight=512,424
         self.depthFrame=None
         self.originalDepthFrame=None
         self.colorWidth,self.colorHeight=None, None
@@ -158,13 +158,35 @@ class humanTracker():
         self.colorFrame=copy.deepcopy(colorRGBFrame)#cv2.cvtColor(colorRGBFrame,cv2.COLOR_RGB2BGR)
     def skeletonSpaceToColor(self,x,y,z,cameraOffset): #x,y,z in meters
         cameraPos=(x+cameraOffset,y,z)
-        colX=((self.colorWidth/2)-(x/np.abs(x))*
-               self.horizontalColorPixelRatio*(math.atan(np.abs(x)/z))*(180/math.pi))
+        x=(x+cameraOffset)
+        if x==0:
+            colX=(self.colorWidth/2)
+        else:
+            colX=((self.colorWidth/2)-(x/np.abs(x))*
+                   self.horizontalColorPixelRatio*(math.atan(np.abs(x)/z))*(180/math.pi))
         colX=self.colorWidth-int(colX)
-        rowY=((self.colorHeight/2)-(y/np.abs(y))*
-               self.verticalColorPixelRatio*(math.atan(np.abs(y)/z))*(180/math.pi))
+        if y==0:
+            rowY=(self.colorHeight/2)
+        else:
+            rowY=((self.colorHeight/2)-(y/np.abs(y))*
+                   self.verticalColorPixelRatio*(math.atan(np.abs(y)/z))*(180/math.pi))
         rowY=int(rowY)
         return (rowY,colX)
+    def depthSpaceToSkeleton(self,row,col,z):
+        z=z/1000
+        if col==int(self.depthWidth/2):
+            x=0
+        else:
+            x=((((self.depthWidth/2)-col)/np.abs((self.depthWidth/2)-col))*z
+                  *math.tan((np.abs((self.depthWidth/2)-col)/
+                  self.horizontalDepthPixelRatio)*math.pi/180))
+        if row==int(self.depthHeight/2):
+            y=0
+        else:
+            y=((((self.depthHeight/2)-row)/np.abs((self.depthHeight/2)-row))*z
+                  *math.tan((np.abs((self.depthHeight/2)-row)/
+                  self.verticalDepthPixelRatio)*math.pi/180))
+        return (x,y,z) #in meters
     def getTipAndHandData(self):
         wristPos=self.kinect.getRightWristPosition()
         while wristPos==None:
@@ -172,21 +194,37 @@ class humanTracker():
         (wristX,wristY,wristZ)=wristPos
         print("Wrist relative to kinect center: ",wristPos)
         self.getColorFrame()
-        self.getDepthLineAndFrame()
         kinectCameraOffset=9.5/100
         (rowY,colX)=self.skeletonSpaceToColor(wristX,wristY,wristZ,kinectCameraOffset)
-        cv2.imwrite("ColorImageTaken.PNG",self.colorFrame)
+        #cv2.imwrite("ColorImageTaken.PNG",self.colorFrame)
         coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
-        self.getDepthLineAndFrame()
         if coords==None: return None
+        self.getDepthLineAndFrame()
         (tipColorY,tipColorX)=coords[1]
         (startingColorY,startingColorX)=coords[0]
         transformedColorFrame=[[0]*1920 for i in range(1080)]
         print("Saber start: ",startingColorY,startingColorX)
         print("Saber tip: ",tipColorY,tipColorX)
+        for j in range(len(self.depthFrame)):
+            for k in range(len(self.depthFrame[0])):
+                currentDepth=self.depthFrame[j][k]
+                if currentDepth==0: continue
+                (skelX,skelY,skelZ)=self.depthSpaceToSkeleton(j,k,currentDepth)
+                (colorRow,colorCol)=self.skeletonSpaceToColor(skelX,skelY,skelZ,kinectCameraOffset)
+                if (colorRow>=1080) or colorCol>=1920 or colorRow<0 or colorCol<0:
+                    #print(colorRow,colorCol," x: ",skelX," y: ",skelY," z: ",skelZ)
+                    continue
+                transformedColorFrame[colorRow][colorCol]=self.depthFrame[j][k]
+        transformedColorFrame=np.array(transformedColorFrame)
+        startTargetRegion=transformedColorFrame[startingColorY-10:startingColorY+11,startingColorX-10:startingColorX+10]
+        tipTargetRegion=transformedColorFrame[tipColorY-10:tipColorY+11,tipColorX-10:tipColorX+10]
+        startAVGDistance=np.mean(startTargetRegion[startTargetRegion>0])
+        tipAVGDistance=np.mean(tipTargetRegion[tipTargetRegion>0])
+        print("Saber start distance (mm): ",startAVGDistance)
+        print("Saber tip distance (mm): ",tipAVGDistance)
 
 
-        #b=raw_input("Press enter to continue.")
+        b=raw_input("Press enter to continue.")
         '''
         tipXDiff=self.colorWidth/2-tipColorX
         colorXAngle=np.abs(tipXDiff)/self.horizontalColorPixelRatio #Degrees
