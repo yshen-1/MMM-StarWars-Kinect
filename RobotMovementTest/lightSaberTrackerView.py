@@ -156,7 +156,15 @@ class humanTracker():
         self.colorWidth,self.colorHeight=colorWidth,colorHeight
         colorRGBFrame=convertColorFrameIntoRGBArray(colorFrame,colorWidth,colorHeight)
         self.colorFrame=copy.deepcopy(colorRGBFrame)#cv2.cvtColor(colorRGBFrame,cv2.COLOR_RGB2BGR)
-
+    def skeletonSpaceToColor(self,x,y,z,cameraOffset): #x,y,z in meters
+        cameraPos=(x+cameraOffset,y,z)
+        colX=((self.colorWidth/2)-(x/np.abs(x))*
+               self.horizontalColorPixelRatio*(math.atan(np.abs(x)/z))*(180/math.pi))
+        colX=self.colorWidth-int(colX)
+        rowY=((self.colorHeight/2)-(y/np.abs(y))*
+               self.verticalColorPixelRatio*(math.atan(np.abs(y)/z))*(180/math.pi))
+        rowY=int(rowY)
+        return (rowY,colX)
     def getTipAndHandData(self):
         wristPos=self.kinect.getRightWristPosition()
         while wristPos==None:
@@ -166,13 +174,7 @@ class humanTracker():
         self.getColorFrame()
         self.getDepthLineAndFrame()
         kinectCameraOffset=9.5/100
-        wristCameraPos=(wristX+kinectCameraOffset,wristY,wristZ)
-        colX=((self.colorWidth/2)-(wristX/np.abs(wristX))*
-               self.horizontalColorPixelRatio*(math.atan(np.abs(wristX)/wristZ))*(180/math.pi))
-        colX=self.colorWidth-int(colX)
-        rowY=((self.colorHeight/2)-(wristY/np.abs(wristY))*
-               self.verticalColorPixelRatio*(math.atan(np.abs(wristY)/wristZ))*(180/math.pi))
-        rowY=int(rowY)
+        (rowY,colX)=self.skeletonSpaceToColor(wristX,wristY,wristZ,kinectCameraOffset)
         cv2.imwrite("ColorImageTaken.PNG",self.colorFrame)
         coords=self.saberTracker.track(self.colorFrame,(rowY,colX))
         self.getDepthLineAndFrame()
