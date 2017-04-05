@@ -120,6 +120,7 @@ class LightSaberTracker(object):
     def getSaberCellsDirected(self, grid, cellPos, direction, results):
         (row, col) = cellPos
         (drow, dcol) = direction
+        print(row,drow,col,dcol)
         newCell, visited = grid[row+drow][col+dcol]
         colorAvg = np.average(newCell)
         if colorAvg < 5 or visited:
@@ -182,7 +183,7 @@ class LightSaberTracker(object):
     ###############
     def debugInit(self):
         self.debugOn = False
-        self.imageDebugDir = r'C:/Users/Arthur/Desktop/RoboticsClub/MMM-StarWars-Kinect/openCVTest'
+        self.imageDebugDir = r'C:/Users/Danny/Documents/CMU/MMM/Python 27/KinectTestCode/MMM-StarWars-Kinect/RobotMovementTest'
 
     def debugShow(self, isolated, startPoint, endPoint):
         if self.debugOn:
