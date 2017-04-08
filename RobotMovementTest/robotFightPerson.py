@@ -168,22 +168,23 @@ class ReferenceFrame(object):
 
     def updateDistanceToParent(self):
         if self.parent != None:
-            self.distanceToParent = self.getDistance(self.parent.position, self.position)
+            self.relativeDistance = self.getDistance(self.parent.position, self.position)
         else:
-            self.distanceToParent = self.getDistance((0, 0, 0), self.position)
+            self.relativeDistance = self.getDistance((0, 0, 0), self.position)
 
     def updateRelativePosToParent(self):
         if self.parent != None
             (px, py, pz) = self.parent.position
             (x, y, z) = self.position
-            self.relativePosToParent = (x-px, y-py, z-pz)
+            self.relativePos = (x-px, y-py, z-pz)
         else:
-            self.relativePosToParent = self.position
+            self.relativePos = self.position
 
-    def updatePosition(self, newPos):
+    def updatePosition(self, newPos, elapsed):
+        self.elapsed
         self.prevPos = self.position
-        self.prevDistanceToParent = self.distanceToParent
-        self.prevRelativePosToParent = self.relativePosToParent
+        self.prevRelativeDistance = self.relativeDistance
+        self.prevRelativePos = self.relativePos
         self.position = newPos
         self.updateDistanceToParent()
         self.updateRelativePosToParent()
@@ -197,8 +198,31 @@ class ReferenceFrame(object):
     def getMovement(self):
         if self.parent != None:
             (parentTranslation, parentRotation) = self.parent.getMovement()
+        else:
+            (parentTranslation, parentRotation) = (0, 0)
+        translation, rotationPos = self.getTranslation()
         
 
+    def getMagnitude(self, vector):
+        (a,b,c) = vector
+        return ((a**2)+(b**2)+(c**2))**0.5
+
+    def getTranslation(self):
+        (px, py, pz) = self.prevPos
+        (u, v, w) = self.parent.position
+        (x, y, z) = self.pos
+        (a,b,c)=self.parent.displacementVector
+        (px, py, pz) = (px+a, py+b, pz+c)
+        (ra, rb, rc) = (x-px, y-py, z-pz)
+        d = self.prevRelativeDistance
+        parent2Child = (x-u, y-v, z-w)
+        m = self.getMagnitude(parent2Child)
+        parent2ChildUnit = (a / m for a in parent2Child)
+        (ca, cb, cc) = (a * d for a in parent2ChildUnit)
+        (rx, ry, rz) = (u+ca, v+cb, w+cc)
+        translation = (x-rx, y-ry, z-rz)
+        rotationPos = (rx, ry, rz)
+        return translation, rotationPos
 
     def addChild(self, childName, childPos):
         self.child = ReferenceFrame(name = childName,parent = self, position = childPos)
@@ -224,6 +248,8 @@ class Enemy(object):
         self.rWrist = self.rElbow.addChild('rWrist', self.rWristPos)
         self.saberStart = self.rWrist.addChild('saberStart', saberStartPos)
         self.saberEnd = self.rWrist.addChild('saberEnd', saberEndPos)
+        self.referencePoints =(self.spine, self.rShoulder, self.rElbow, 
+            self.rWrist, self.saberStart, self.saberEnd)
 
 
 class EnemyTracker(object):
