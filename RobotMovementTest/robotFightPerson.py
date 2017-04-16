@@ -24,6 +24,8 @@ space coordinate system. X,Y,Z from the depth stream are in mm.
 
 ALL DATA ACQUIRED FROM BODY DATA STREAM IS IN METERS.
 '''
+
+#TODO: Account for fact that first arg of mmm.setWheelVelocity is for right motor
 def rgbString(red, green, blue):
     #http://www.cs.cmu.edu/~112/notes/notes-graphics.html#customColors
     return "#%02x%02x%02x" % (red, green, blue)
@@ -201,7 +203,7 @@ class ReferenceFrame(object):
         else:
             (parentTranslation, parentRotation) = (0, 0)
         translation, rotationPos = self.getTranslation()
-        
+
 
     def getMagnitude(self, vector):
         (a,b,c) = vector
@@ -232,7 +234,7 @@ class Enemy(object):
     def __init__(self, enemyBody)
         # body is a kinect object
         self.body = enemyBody
-        
+
     def updateJointsPos(self, jointsPos):
         rWrist, rElbow, rShoulder, Spine = jointsPos
         self.rWristPos = rWrist
@@ -248,7 +250,7 @@ class Enemy(object):
         self.rWrist = self.rElbow.addChild('rWrist', self.rWristPos)
         self.saberStart = self.rWrist.addChild('saberStart', saberStartPos)
         self.saberEnd = self.rWrist.addChild('saberEnd', saberEndPos)
-        self.referencePoints =(self.spine, self.rShoulder, self.rElbow, 
+        self.referencePoints =(self.spine, self.rShoulder, self.rElbow,
             self.rWrist, self.saberStart, self.saberEnd)
 
 

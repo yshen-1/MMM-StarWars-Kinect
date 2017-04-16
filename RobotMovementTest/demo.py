@@ -23,6 +23,8 @@ space coordinate system. X,Y,Z from the depth stream are in mm.
 
 ALL DATA ACQUIRED FROM BODY DATA STREAM IS IN METERS.
 '''
+#TODO: 1st arg of mmm.setWheelVelocity is for right motor
+#TODO: Robot rotates around point 6-7 cm in front of robot
 def rgbString(red, green, blue):
     #http://www.cs.cmu.edu/~112/notes/notes-graphics.html#customColors
     return "#%02x%02x%02x" % (red, green, blue)
@@ -98,6 +100,21 @@ class KinectHandler(object):
                                         rightElbow.Position,rightShoulder.Position)
                     bodyList.append(newBody)
             return bodyList
+    def getPerson(self):
+        bodies=None
+        if self.kinectBodyStream.has_new_body_frame():
+            bodies=self.kinectBodyStream.get_last_body_frame()
+        if bodies!=None:
+            for body in bodies.bodies:
+                if body.is_tracked:
+                    joints=body.joints
+                    hip = joints[PyKinectV2.JointType_SpineBase]
+                    rightWrist=joints[PyKinectV2.JointType_WristRight]
+                    rightElbow=joints[PyKinectV2.JointType_ElbowRight]
+                    rightShoulder=joints[PyKinectV2.JointType_ShoulderRight]
+                    newBody=humanObject(hip.Position,rightWrist.Position,
+                                        rightElbow.Position,rightShoulder.Position)
+                    return newBody
     def getPersonPosition(self): #Use after initial approach
         bodies=None
         if self.kinectBodyStream.has_new_body_frame():
@@ -230,29 +247,138 @@ class Robot(object):
     def turnTowardsOnlyPerson(self):
         angleToPerson=self.kinect.getPersonPosition()
         while np.abs(angleToPerson)>20:
-            if angleToPerson>0: self.mmm.setWheelVelocity(-0.03,0.03)
-            else: self.mmm.setWheelVelocity(0.03,-0.03)
+            if angleToPerson>0:
+                self.mmm.setWheelVelocity(0.03,-0.03)
+            else:
+                self.mmm.setWheelVelocity(-0.03,0.03)
             time.sleep(0.1)
             self.mmm.setWheelVelocity(0,0)
             angleToPerson=self.kinect.getPersonPosition()
+        self.mmm.setWheelVelocity(0,0)
     def goToTarget(self):
         target=self.getTargetPosition()
-        while target==None: target=self.getTargetPosition()
+        while target==None or target==False: target=self.getTargetPosition()
         angleToTarget=math.atan(np.abs(target.hip.x)/target.hip.z)*180/math.pi
-        if target.hip.x>0: self.mmm.setWheelVelocity(-0.05,0.05)
-        else: self.mmm.setWheelVelocity(0.05,-0.05)
+        timePerDegree=0
+        if target.hip.x>0:
+            self.mmm.setWheelVelocity(0.05,-0.05)
+            timePerDegree=24.2/360
+        else:
+            self.mmm.setWheelVelocity(-0.05,0.05)
+            timePerDegree=22.5/360
         timeRequired=angleToTarget*(timePerDegree) #time required for robot to turn 1 degree
         time.sleep(timeRequired)
         distanceToTarget=(target.hip.x**2+target.hip.z**2)**0.5 # meters
-        self.mmm.setWheelVelocity(0.15,0.15)
-        timeForForward=(distanceToTarget-1)/0.15
-        time.sleep(timeForForward)
+        if distanceToTarget>1: #m
+            self.mmm.setWheelVelocity(0.15,0.15)
+            timeForForward=(distanceToTarget-1)/0.15
+            time.sleep(timeForForward)
         self.mmm.setWheelVelocity(0,0)
         self.turnTowardsOnlyPerson()
+    def calculateLightsaberPosition(bodyObject):
+        #Assume elbow is origin point for wrist and shoulder vectors
+        #ASSUME LIGHTSABER IS HELD AT 90 DEGREE ANGLE TO ARM UPWARDS
+        wristVector=(np.array([bodyObject.wrist.x,bodyObject.wrist.y,
+                     bodyObject.wrist.z])-
+                     np.array([bodyObject.elbow.x,bodyObject.elbow.y,bodyObject.elbow.z]))
+        shoulderVector=(np.array([bodyObject.shoulder.x,bodyObject.shoulder.y,
+                     bodyObject.shoulder.z])-
+                     np.array([bodyObject.elbow.x,bodyObject.elbow.y,bodyObject.elbow.z]))
+        perpenVector=np.cross(wristVector,shoulderVector)
+        lightsaberVector=np.cross(perpenVector,wristVector)
+        lightsaberVector=lightsaberVector/np.linalg.norm(lightsaberVector)
+        lightsaberVector*=0.595
+        lightsaberTipVector=lightsaverVector+wristVector
+        lightsaberPosition=lightsaberTipVector+np.array([bodyObject.elbow.x,bodyObject.elbow.y,bodyObject.elbow.z])
+        return lightsaberPosition
+    def inHitBox(position):
+        return position[0]>=-0.3 and position[0]<=0.3 and position[1]>=-1.1 and position[1]<0.11
+    def fightPerson(self):
+        #Assume first person detected is the lightsaber person
+        currentBody=self.kinect.getPerson()
+        lastSampleTime=time.time()
+        prevSampleTime=None
+        prevBody=None
+        lastAttackTime=time.time()
+        while distance(0,0,currentBody.hip.x,currentBody.hip.z)<2: #Person is fighting if within 2 meters
+            if prevBody==None:
+                prevBody=copy.deepcopy(currentBody)
+                currentBody=self.kinect.getPerson()
+                prevSampleTime=lastSampleTime
+                lastSampleTime=time.time()
+            currentPos=calculateLightsaberPosition(currentBody)
+            lastPos=calculateLightsaberPosition(prevBody)
+            tipDisplacement=currentPos-lastPos
+            bottomDisplacement=np.array([currentBody.wrist.x-prevBody.wrist.x,currentBody.wrist.y-prevBody.wrist.y,currentBody.wrist.z-prevBody.wrist.z])
+            tipVelocity=copy.deepcopy(tipDisplacement)/(lastSampleTime-prevSampleTime)
+            bottomVelocity=copy.deepcopy(bottomDisplacement)/(lastSampleTime-prevSampleTime)
+            tipSpeed=np.linalg.norm(tipVelocity)
+            bottomSpeed=np.linalg.norm(bottomVelocity)
+            tTip=-currentPos[2]/tipVelocity[2]
+            bottomT=-currentBody.wrist.z/bottomVelocity[2]
+            if tTip>0 and bottomT>0:
+                tipProjectedPosition=currentPos+tTip*tipVelocity
+                bottomProjectedPosition=np.array([currentBody.wrist.x,currentBody.wrist.y,currentBody.wrist.z])+bottomT*bottomVelocity
+                if (inHitBox(tipProjectedPosition) or inHitBox(bottomProjectedPosition)) and (tipSpeed>0.5):
+                    #Calculate hit line and block
+                    lastAttackTime=time.time()
+                    xArm=(0.2+bottomProjectedPosition[0])
+                    shoulderTheta=math.acos((abs((0.2+bottomProjectedPosition[0])-0.263)/0.452))*180/math.pi
+                    shoulderMotorValue=160-shoulderTheta
+                    if shoulderMotorValue<0:
+                        shoulderMotorValue=0
+                    elif shoulderMotorValue>120:
+                        shoulderMotorValue=120
+                    theta=160-shoulderMotorValue
+                    currentArmZ=0.452*math.sin(theta)
+                    tipTime=(currentArmZ-currentPos[2])/tipVelocity[2]
+                    bottomTime=(currentArmZ-currentBody.wrist.z)/bottomVelocity[2]
+                    newTipProjection=currentPos+tipTime*tipVelocity
+                    newBottomProjection=np.array([currentBody.wrist.x,currentBody.wrist.y,currentBody.wrist.z])+bottomTime*bottomVelocity
+                    defenseSaberTipY=0.2+newBottomProjection[1]+((newTipProjection[1]-newBottomProjection[1])/(newTipProjection[0]-newBottomProjection[0]))*(0.6*math.cos(60*math.pi/180)+xArm)-newBottomProjection[0]*((newTipProjection[1]-newBottomProjection[1])/(newTipProjection[0]-newBottomProjection[0]))
+                    dY=defenseSaberTipY-0.6*math.sin(60*math.pi/180)
+                    elbowTheta=(dY/np.abs(dY))*(math.asin(np.abs(dY)/0.385))*180/math.pi
+                    if elbowTheta>60:
+                        elbowTheta=60
+                    elif elbowTheta<-60:
+                        elbowTheta=-60
+                    self.mmm.rotateShoulders(shoulderMotorValue,0)
+                    self.mmm.rotateElbows(elbowTheta,-60)
+                    time.sleep(1)
+            elif time.time()-lastAttackTime>10:
+                #Attack!
+                self.turnTowardsOnlyPerson()
+                jedi=self.kinect.getPerson()
+                distanceToJedi=distance(0,jedi.hip.x,0,jedi.hip.z)
+                timeToMoveForwardAndBack=(distanceToJedi-0.3)/0.1
+                self.mmm.setWheelVelocity(0.1,0.1)
+                time.sleep(timeToMoveForwardAndBack)
+                self.mmm.setWheelVelocity(0,0)
+                self.mmm.rotateShoulders(90,120)
+                self.mmm.rotateElbows(60,-60)
+                time.sleep(1)
+                self.mmm.rotateElbows(-30,-60)
+                time.sleep(0.5)
+                self.mmm.rotateElbows(60,-60)
+                time.sleep(1)
+                self.mmm.setWheelVelocity(-0.1,-0.1)
+                time.sleep(timeToMoveForwardAndBack)
+                self.mmm.setWheelVelocity(0,0)
+
+
+            #UPDATE DATA
+            prevBody=copy.deepcopy(currentBody)
+            currentBody=self.kinect.getPerson()
+            prevSampleTime=lastSampleTime
+            lastSampleTime=time.time()
     def run(self):
+        self.mmm.setWheelVelocity(0,0)
+        self.mmm.rotateShoulders(70,80)
+        self.mmm.rotateElbows(-60,-60)
+        time.sleep(1)
         while self.isRunning:
             self.goToTarget()
-            #self.fightPerson()
+            self.fightPerson()
             if not checkIfKinectConnected():
                 print("Bye!")
                 self.isRunning=False
